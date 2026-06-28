@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Process;
 
 function seed(string $base): void
 {
@@ -93,6 +94,48 @@ it('merges composer scripts and dev deps without npm or duplicates', function ()
         ->and($composer['require-dev'])->not->toHaveKey('pestphp/pest-plugin-laravel');
 
     expect($this->appBase.'/package.json')->not->toBeFile();
+});
+
+it('runs plain composer update after installing scripts', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process) => $process->command === 'composer update');
+});
+
+it('uses sail composer update only when sail is installed and configured', function () {
+    seed($this->appBase);
+    mkdir($this->appBase.'/vendor/bin', 0777, true);
+    file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
+    file_put_contents($this->appBase.'/compose.yaml', "services: {}\n");
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process) => $process->command === './vendor/bin/sail composer update');
+});
+
+it('falls back to plain composer when sail is installed but not configured', function () {
+    seed($this->appBase);
+    mkdir($this->appBase.'/vendor/bin', 0777, true);
+    file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
+    // no compose.yaml / docker-compose.yml
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process) => $process->command === 'composer update');
+});
+
+it('does not run composer update with --no-install', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-install' => true, '--no-interaction' => true]);
+
+    Process::assertNothingRan();
 });
 
 it('skips existing files unless forced', function () {

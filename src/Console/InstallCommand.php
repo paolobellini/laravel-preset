@@ -133,7 +133,7 @@ final class InstallCommand extends Command
         }
 
         $dependenciesChanged = in_array('scripts', $groups, true);
-        $updated = $dependenciesChanged && ! $this->option('no-install') && $this->runComposerUpdate();
+        $updated = $dependenciesChanged && ! $this->option('no-install') && $this->runComposerUpdate($files);
 
         $this->newLine();
         $this->components->info('Preset installed.');
@@ -146,24 +146,36 @@ final class InstallCommand extends Command
         return self::SUCCESS;
     }
 
-    private function runComposerUpdate(): bool
+    private function runComposerUpdate(Filesystem $files): bool
     {
+        $command = $this->usesSail($files) ? './vendor/bin/sail composer update' : 'composer update';
+
         $this->newLine();
-        $this->components->info('Running composer update…');
+        $this->components->info("Running {$command}…");
 
         $result = Process::path($this->laravel->basePath())
             ->forever()
-            ->run('composer update', function (string $type, string $output): void {
+            ->run($command, function (string $type, string $output): void {
                 $this->output->write($output);
             });
 
         if (! $result->successful()) {
-            $this->components->error('composer update failed — run it manually.');
+            $this->components->error("{$command} failed — run it manually.");
 
             return false;
         }
 
         return true;
+    }
+
+    private function usesSail(Filesystem $files): bool
+    {
+        if (! $files->exists($this->basePath('vendor/bin/sail'))) {
+            return false;
+        }
+
+        return $files->exists($this->basePath('compose.yaml'))
+            || $files->exists($this->basePath('docker-compose.yml'));
     }
 
     /**

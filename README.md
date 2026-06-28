@@ -12,7 +12,9 @@ php artisan preset:install
 ```
 
 `preset:install` runs `composer update` for you when the `scripts` group is
-selected (pass `--no-install` to skip). Then generate helpers:
+selected — using `./vendor/bin/sail composer update` when Laravel Sail is
+installed, otherwise plain `composer update` (pass `--no-install` to skip). Then
+generate helpers:
 
 ```bash
 composer ide-helper
