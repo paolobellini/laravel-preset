@@ -6,6 +6,7 @@ namespace PaoloBellini\LaravelPreset\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Process;
 
 use function Laravel\Prompts\multiselect;
 
@@ -16,7 +17,8 @@ final class InstallCommand extends Command
         {--ai : Install the .ai conventions and guidelines}
         {--scripts : Install composer quality scripts}
         {--github : Install GitHub Actions workflows (calls the bellini.one reusable workflows)}
-        {--force : Overwrite files that already exist}';
+        {--force : Overwrite files that already exist}
+        {--no-install : Skip the composer update that runs after install}';
 
     protected $description = 'Scaffold the personal Laravel preset: tooling configs, conventions, scripts and CI.';
 
@@ -48,6 +50,16 @@ final class InstallCommand extends Command
      */
     private const GITHUB_DIRS = [
         'github' => '.github',
+    ];
+
+    /**
+     * Starter-kit workflows superseded by the preset, removed before copying.
+     *
+     * @var array<int, string>
+     */
+    private const SUPERSEDED_WORKFLOWS = [
+        '.github/workflows/lint.yml',
+        '.github/workflows/tests.yml',
     ];
 
     /**
@@ -120,15 +132,38 @@ final class InstallCommand extends Command
             $this->installGithub($files);
         }
 
+        $dependenciesChanged = in_array('scripts', $groups, true);
+        $updated = $dependenciesChanged && ! $this->option('no-install') && $this->runComposerUpdate();
+
         $this->newLine();
         $this->components->info('Preset installed.');
-        $this->components->bulletList([
-            'Run <fg=cyan>composer update</> to pull the new PHP dependencies.',
+        $this->components->bulletList(array_values(array_filter([
+            $updated ? null : 'Run <fg=cyan>composer update</> to pull the new PHP dependencies.',
             'Run <fg=cyan>composer ide-helper</> to generate IDE helpers and model docblocks.',
             'Run <fg=cyan>composer cleanup</> to verify everything passes.',
-        ]);
+        ])));
 
         return self::SUCCESS;
+    }
+
+    private function runComposerUpdate(): bool
+    {
+        $this->newLine();
+        $this->components->info('Running composer update…');
+
+        $result = Process::path($this->laravel->basePath())
+            ->forever()
+            ->run('composer update', function (string $type, string $output): void {
+                $this->output->write($output);
+            });
+
+        if (! $result->successful()) {
+            $this->components->error('composer update failed — run it manually.');
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -187,6 +222,17 @@ final class InstallCommand extends Command
 
     private function installGithub(Filesystem $files): void
     {
+        $this->components->task('Removing superseded starter-kit workflows', function () use ($files): void {
+            foreach (self::SUPERSEDED_WORKFLOWS as $workflow) {
+                $target = $this->basePath($workflow);
+
+                if ($files->exists($target)) {
+                    $files->delete($target);
+                    $this->line("  <fg=yellow>removed</> {$workflow}");
+                }
+            }
+        });
+
         $this->components->task('Copying GitHub Actions workflows', function () use ($files): void {
             foreach (self::GITHUB_DIRS as $stub => $destination) {
                 $this->copyDirectory($files, $stub, $destination);

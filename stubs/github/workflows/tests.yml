@@ -1,0 +1,10 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    uses: paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0

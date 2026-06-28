@@ -1,4 +1,4 @@
-name: ci
+name: analyse
 
 on:
   push:
@@ -6,8 +6,5 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  analyse:
     uses: paolobellini/bellini.one/.github/workflows/laravel-lint.yml@v1.0
-
-  test:
-    uses: paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0

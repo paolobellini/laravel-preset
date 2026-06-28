@@ -40,23 +40,41 @@ it('copies only the .ai conventions, nothing else', function () {
         ->and($this->appBase.'/CLAUDE.md')->not->toBeFile();
 });
 
-it('copies the github caller workflows', function () {
+it('copies the split github caller workflows', function () {
     Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
 
-    expect($this->appBase.'/.github/workflows/ci.yml')->toBeFile()
-        ->and($this->appBase.'/.github/workflows/security.yml')->toBeFile();
+    expect($this->appBase.'/.github/workflows/analyse.yml')->toBeFile()
+        ->and($this->appBase.'/.github/workflows/tests.yml')->toBeFile()
+        ->and($this->appBase.'/.github/workflows/security.yml')->toBeFile()
+        ->and($this->appBase.'/.github/workflows/ci.yml')->not->toBeFile();
 
-    expect(file_get_contents($this->appBase.'/.github/workflows/ci.yml'))
+    expect(file_get_contents($this->appBase.'/.github/workflows/analyse.yml'))
+        ->toContain('paolobellini/bellini.one/.github/workflows/laravel-lint.yml@v1.0');
+    expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))
         ->toContain('paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0');
     expect(file_get_contents($this->appBase.'/.github/workflows/security.yml'))
         ->toContain('branches: [staging]')
         ->toContain('paolobellini/bellini.one/actions/general/security@v1.0');
 });
 
+it('removes superseded starter-kit workflows', function () {
+    $dir = $this->appBase.'/.github/workflows';
+    mkdir($dir, 0777, true);
+    file_put_contents($dir.'/lint.yml', 'name: starter-lint');
+    file_put_contents($dir.'/tests.yml', 'name: starter-tests');
+
+    Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
+
+    expect($dir.'/lint.yml')->not->toBeFile();
+    // starter tests.yml replaced by ours (references the reusable workflow)
+    expect(file_get_contents($dir.'/tests.yml'))
+        ->toContain('paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0');
+});
+
 it('merges composer scripts and dev deps without npm or duplicates', function () {
     seed($this->appBase);
 
-    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+    Artisan::call('preset:install', ['--scripts' => true, '--no-install' => true, '--no-interaction' => true]);
 
     $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
 

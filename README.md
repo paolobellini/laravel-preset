@@ -11,10 +11,10 @@ composer require paolobellini/laravel-preset --dev
 php artisan preset:install
 ```
 
-Then pull deps and generate helpers:
+`preset:install` runs `composer update` for you when the `scripts` group is
+selected (pass `--no-install` to skip). Then generate helpers:
 
 ```bash
-composer update
 composer ide-helper
 ```
 
@@ -66,11 +66,14 @@ ESLint, Prettier, TypeScript and their `lint`/`format`/`types:check` scripts.
 
 ### `github` — CI workflows
 
-Copies caller workflows that reference the reusable workflows / composite
-actions in [`paolobellini/bellini.one`](https://github.com/paolobellini/bellini.one):
+First removes the starter-kit `lint.yml` + `tests.yml` (superseded), then copies
+caller workflows that reference the reusable workflows / composite actions in
+[`paolobellini/bellini.one`](https://github.com/paolobellini/bellini.one):
 
-- `.github/workflows/ci.yml` — on push to `main` / any PR, calls
-  `laravel-lint.yml@v1.0` and `laravel-test.yml@v1.0`.
+- `.github/workflows/analyse.yml` — on push to `main` / any PR, calls
+  `laravel-lint.yml@v1.0` (pint + rector + phpstan + node-checks).
+- `.github/workflows/tests.yml` — on push to `main` / any PR, calls
+  `laravel-test.yml@v1.0`.
 - `.github/workflows/security.yml` — on PR targeting `staging`, runs the
   `actions/general/security@v1.0` Trivy scan.
 
@@ -79,6 +82,7 @@ actions in [`paolobellini/bellini.one`](https://github.com/paolobellini/bellini.
 ```bash
 php artisan preset:install --configs --ai --scripts --github   # pick groups
 php artisan preset:install --force                             # overwrite existing files / deps
+php artisan preset:install --no-install                        # skip the auto composer update
 ```
 
 Without flags in a non-interactive shell, all groups install.
