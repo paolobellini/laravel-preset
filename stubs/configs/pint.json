@@ -1,0 +1,15 @@
+{
+    "preset": "laravel",
+    "rules": {
+        "simplified_null_return": true,
+        "array_indentation": false,
+        "new_with_parentheses": {
+            "anonymous_class": true,
+            "named_class": true
+        },
+        "declare_strict_types": true,
+        "Pint/phpdoc_type_annotations_only": true,
+        "final_class": true,
+        "modifier_keywords": true
+    }
+}

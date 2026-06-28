@@ -1,0 +1,13 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    uses: paolobellini/bellini.one/.github/workflows/laravel-lint.yml@v1.0
+
+  test:
+    uses: paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0
