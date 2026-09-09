@@ -18,7 +18,7 @@ final class InstallCommand extends Command
         {--scripts : Install composer quality scripts}
         {--github : Install GitHub Actions workflows (calls the bellini.one reusable workflows)}
         {--force : Overwrite files that already exist}
-        {--no-install : Skip the composer update that runs after install}';
+        {--no-install : Write the new dependencies into composer.json without installing them}';
 
     protected $description = 'Scaffold the personal Laravel preset: tooling configs, conventions, scripts and CI.';
 
@@ -63,26 +63,51 @@ final class InstallCommand extends Command
     ];
 
     /**
-     * @var array<string, string>
+     * Packages added to "require". Intentionally unconstrained: the constraint is
+     * resolved by composer at install time, so a fresh install always gets the
+     * latest stable release instead of a constraint frozen in this package.
+     *
+     * @var array<int, string>
      */
     private const COMPOSER_REQUIRE = [
-        'nunomaduro/essentials' => '^1.2',
+        'nunomaduro/essentials',
+        'spatie/laravel-data',
+        'spatie/laravel-query-builder',
+        'thecodingmachine/safe',
     ];
 
     /**
-     * @var array<string, string>
+     * Packages added to "require-dev". Unconstrained, see self::COMPOSER_REQUIRE.
+     *
+     * @var array<int, string>
      */
     private const COMPOSER_REQUIRE_DEV = [
-        'barryvdh/laravel-ide-helper' => '^3.7',
-        'driftingly/rector-laravel' => '^2.5',
-        'fruitcake/laravel-debugbar' => '^4.3',
-        'larastan/larastan' => '^3.9',
-        'laravel/boost' => '^2.2',
-        'laravel/pail' => '^1.2.5',
-        'laravel/pint' => '^1.27',
-        'pestphp/pest' => '^4.7',
-        'pestphp/pest-plugin-type-coverage' => '^4.0',
-        'rector/rector' => '^2.5',
+        'driftingly/rector-laravel',
+        'fruitcake/laravel-debugbar',
+        'larastan/larastan',
+        'laravel/boost',
+        'laravel/pail',
+        'laravel/pint',
+        'pestphp/pest',
+        'pestphp/pest-plugin-agent',
+        'pestphp/pest-plugin-evals',
+        'pestphp/pest-plugin-faker',
+        'pestphp/pest-plugin-mutate',
+        'pestphp/pest-plugin-phpstan',
+        'pestphp/pest-plugin-rector',
+        'pestphp/pest-plugin-type-coverage',
+        'rector/rector',
+        'spatie/laravel-typescript-transformer',
+        'thecodingmachine/phpstan-safe-rule',
+    ];
+
+    /**
+     * Plugins the preset dependencies need allowed to run.
+     *
+     * @var array<int, string>
+     */
+    private const ALLOWED_PLUGINS = [
+        'pestphp/pest-plugin',
     ];
 
     /**
@@ -96,10 +121,6 @@ final class InstallCommand extends Command
         'analyse' => 'phpstan analyse --memory-limit=2G',
         'check:lint' => 'pint --parallel --test',
         'check:refactor' => 'rector --dry-run',
-        'ide-helper' => [
-            '@php artisan ide-helper:generate',
-            '@php artisan ide-helper:models -RW',
-        ],
         'tests' => ['@type', '@coverage'],
         'php-checks' => ['@check:lint', '@analyse', '@check:refactor'],
         'node-checks' => ['npm run lint:check', 'npm run format:check', 'npm run types:check'],
@@ -132,23 +153,23 @@ final class InstallCommand extends Command
             $this->installGithub($files);
         }
 
-        $dependenciesChanged = in_array('scripts', $groups, true);
-        $updated = $dependenciesChanged && ! $this->option('no-install') && $this->runComposerUpdate($files);
-
         $this->newLine();
         $this->components->info('Preset installed.');
         $this->components->bulletList(array_values(array_filter([
-            $updated ? null : 'Run <fg=cyan>composer update</> to pull the new PHP dependencies.',
-            'Run <fg=cyan>composer ide-helper</> to generate IDE helpers and model docblocks.',
+            $this->option('no-install') ? 'Run <fg=cyan>composer update</> to pull the new PHP dependencies.' : null,
             'Run <fg=cyan>composer cleanup</> to verify everything passes.',
         ])));
 
         return self::SUCCESS;
     }
 
-    private function runComposerUpdate(Filesystem $files): bool
+    /**
+     * @param  array<int, string>  $arguments
+     */
+    private function runComposer(Filesystem $files, array $arguments): bool
     {
-        $command = $this->usesSail($files) ? './vendor/bin/sail composer update' : 'composer update';
+        $binary = $this->usesSail($files) ? './vendor/bin/sail composer' : 'composer';
+        $command = $binary.' '.implode(' ', $arguments);
 
         $this->newLine();
         $this->components->info("Running {$command}…");
@@ -255,6 +276,70 @@ final class InstallCommand extends Command
     private function installScripts(Filesystem $files): void
     {
         $this->components->task('Patching composer.json', fn () => $this->patchComposerJson($files));
+
+        $this->requireDependencies($files);
+    }
+
+    /**
+     * Add the preset dependencies with `composer require`, letting composer resolve
+     * the newest stable constraint for each package.
+     */
+    private function requireDependencies(Filesystem $files): void
+    {
+        $path = $this->basePath('composer.json');
+
+        if (! $files->exists($path)) {
+            return;
+        }
+
+        /** @var array<string, mixed> $composer */
+        $composer = json_decode($files->get($path), true);
+
+        /** @var array<string, string> $require */
+        $require = $composer['require'] ?? [];
+        /** @var array<string, string> $requireDev */
+        $requireDev = $composer['require-dev'] ?? [];
+
+        $missing = $this->missingPackages(self::COMPOSER_REQUIRE, $require + $requireDev);
+        $missingDev = $this->missingPackages(self::COMPOSER_REQUIRE_DEV, $require + $requireDev);
+
+        if ($missing === [] && $missingDev === []) {
+            $this->line('  <fg=yellow>skipped</> composer require (all preset dependencies already present)');
+
+            return;
+        }
+
+        // --no-update still writes the latest constraint, it only skips the install.
+        $flags = ['--no-interaction'];
+
+        if ($this->option('no-install')) {
+            $flags[] = '--no-update';
+        }
+
+        if ($missing !== []) {
+            $this->runComposer($files, ['require', ...$flags, ...$missing]);
+        }
+
+        if ($missingDev !== []) {
+            $this->runComposer($files, ['require', '--dev', ...$flags, ...$missingDev]);
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $packages
+     * @param  array<string, string>  $installed
+     * @return array<int, string>
+     */
+    private function missingPackages(array $packages, array $installed): array
+    {
+        if ($this->option('force')) {
+            return $packages;
+        }
+
+        return array_values(array_filter(
+            $packages,
+            fn (string $package): bool => ! array_key_exists($package, $installed),
+        ));
     }
 
     private function copyFile(Filesystem $files, string $stub, string $destination): void
@@ -303,29 +388,30 @@ final class InstallCommand extends Command
         /** @var array<string, mixed> $composer */
         $composer = json_decode($files->get($path), true);
 
-        $composer['require'] = $this->mergeDependencies($composer['require'] ?? [], self::COMPOSER_REQUIRE);
-        $composer['require-dev'] = $this->mergeDependencies($composer['require-dev'] ?? [], self::COMPOSER_REQUIRE_DEV);
         $composer['scripts'] = array_merge($composer['scripts'] ?? [], self::COMPOSER_SCRIPTS);
+        $composer['config'] = $this->allowPlugins($composer['config'] ?? []);
 
         $files->put($path, $this->encodeJson($composer));
     }
 
     /**
-     * @param  array<string, string>  $current
-     * @param  array<string, string>  $additions
-     * @return array<string, string>
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
      */
-    private function mergeDependencies(array $current, array $additions): array
+    private function allowPlugins(array $config): array
     {
-        foreach ($additions as $name => $constraint) {
-            if (! array_key_exists($name, $current) || $this->option('force')) {
-                $current[$name] = $constraint;
-            }
+        /** @var array<string, bool> $allowed */
+        $allowed = $config['allow-plugins'] ?? [];
+
+        foreach (self::ALLOWED_PLUGINS as $plugin) {
+            $allowed[$plugin] = true;
         }
 
-        ksort($current);
+        ksort($allowed);
 
-        return $current;
+        $config['allow-plugins'] = $allowed;
+
+        return $config;
     }
 
     /**

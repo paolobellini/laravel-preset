@@ -34,6 +34,19 @@ it('copies only the .ai conventions, nothing else', function () {
     Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
 
     expect($this->appBase.'/.ai/guidelines/personal/controllers.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/actions.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/caching.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/enums.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/frontend.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/policies.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/translations.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/exceptions.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/resources.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/traits.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/form-requests.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/php.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/query-builder.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->toBeFile()
         ->and($this->appBase.'/.ai/mcp/mcp.json')->toBeFile()
         ->and($this->appBase.'/.claude')->not->toBeDirectory()
         ->and($this->appBase.'/.junie')->not->toBeDirectory()
@@ -72,40 +85,81 @@ it('removes superseded starter-kit workflows', function () {
         ->toContain('paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0');
 });
 
-it('merges composer scripts and dev deps without npm or duplicates', function () {
-    seed($this->appBase);
-
-    Artisan::call('preset:install', ['--scripts' => true, '--no-install' => true, '--no-interaction' => true]);
-
-    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
-
-    expect($composer['scripts'])->toHaveKeys(['cleanup', 'ide-helper', 'php-checks', 'post-autoload-dump'])
-        ->and($composer['scripts']['ide-helper'])->toContain('@php artisan ide-helper:models -RW')
-        ->and($composer['require'])->toHaveKey('nunomaduro/essentials')
-        ->and($composer['require-dev'])->toHaveKeys([
-            'barryvdh/laravel-ide-helper',
-            'fruitcake/laravel-debugbar',
-            'laravel/pint',
-            'rector/rector',
-            'phpunit/phpunit',
-        ])
-        // these ship with the starter kit already — preset must not add them
-        ->and($composer['require-dev'])->not->toHaveKey('nunomaduro/collision')
-        ->and($composer['require-dev'])->not->toHaveKey('pestphp/pest-plugin-laravel');
-
-    expect($this->appBase.'/package.json')->not->toBeFile();
-});
-
-it('runs plain composer update after installing scripts', function () {
+it('merges composer scripts and allows the pest plugin without npm scripts', function () {
     seed($this->appBase);
     Process::fake();
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process) => $process->command === 'composer update');
+    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
+
+    expect($composer['scripts'])->toHaveKeys(['cleanup', 'php-checks', 'post-autoload-dump'])
+        // ide-helper is no longer part of the preset
+        ->and($composer['scripts'])->not->toHaveKey('ide-helper')
+        ->and($composer['config']['allow-plugins'])->toHaveKey('pestphp/pest-plugin')
+        // constraints are resolved by composer require, never written by the preset
+        ->and($composer['require'])->not->toHaveKey('nunomaduro/essentials')
+        ->and($composer['require'])->not->toHaveKey('spatie/laravel-data')
+        ->and($composer['require-dev'])->not->toHaveKey('rector/rector');
+
+    expect($this->appBase.'/package.json')->not->toBeFile();
 });
 
-it('uses sail composer update only when sail is installed and configured', function () {
+it('requires the preset dependencies unconstrained so composer resolves the latest', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data spatie/laravel-query-builder thecodingmachine/safe');
+
+    Process::assertRan(function ($process) {
+        return str_starts_with($process->command, 'composer require --dev --no-interaction ')
+            && str_contains($process->command, 'pestphp/pest ')
+            && str_contains($process->command, 'pestphp/pest-plugin-rector')
+            && str_contains($process->command, 'pestphp/pest-plugin-phpstan')
+            && str_contains($process->command, 'pestphp/pest-plugin-evals')
+            && str_contains($process->command, 'pestphp/pest-plugin-agent')
+            && str_contains($process->command, 'pestphp/pest-plugin-faker')
+            && str_contains($process->command, 'pestphp/pest-plugin-mutate')
+            && str_contains($process->command, 'rector/rector')
+            && str_contains($process->command, 'thecodingmachine/phpstan-safe-rule')
+            && str_contains($process->command, 'spatie/laravel-typescript-transformer')
+            // dropped from the preset
+            && ! str_contains($process->command, 'barryvdh/laravel-ide-helper')
+            // no explicit versions, ever
+            && ! str_contains($process->command, ':^');
+    });
+});
+
+it('skips packages the project already requires', function () {
+    seed($this->appBase);
+    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
+    $composer['require-dev']['rector/rector'] = '^1.0';
+    file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+
+    Process::assertNotRan(fn ($process) => str_contains($process->command, 'rector/rector'));
+
+    expect(json_decode(file_get_contents($this->appBase.'/composer.json'), true)['require-dev']['rector/rector'])
+        ->toBe('^1.0');
+});
+
+it('re-requires already present packages with --force', function () {
+    seed($this->appBase);
+    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
+    $composer['require-dev']['rector/rector'] = '^1.0';
+    file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--force' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process) => str_contains($process->command, 'rector/rector'));
+});
+
+it('uses sail composer only when sail is installed and configured', function () {
     seed($this->appBase);
     mkdir($this->appBase.'/vendor/bin', 0777, true);
     file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
@@ -114,7 +168,7 @@ it('uses sail composer update only when sail is installed and configured', funct
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process) => $process->command === './vendor/bin/sail composer update');
+    Process::assertRan(fn ($process) => str_starts_with($process->command, './vendor/bin/sail composer require '));
 });
 
 it('falls back to plain composer when sail is installed but not configured', function () {
@@ -126,16 +180,16 @@ it('falls back to plain composer when sail is installed but not configured', fun
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process) => $process->command === 'composer update');
+    Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
 });
 
-it('does not run composer update with --no-install', function () {
+it('writes the constraints without installing with --no-install', function () {
     seed($this->appBase);
     Process::fake();
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-install' => true, '--no-interaction' => true]);
 
-    Process::assertNothingRan();
+    Process::assertRan(fn ($process) => str_contains($process->command, 'composer require --no-interaction --no-update '));
 });
 
 it('skips existing files unless forced', function () {
