@@ -20,7 +20,7 @@ constraints into `composer.json` without installing.
 
 ## What it does
 
-`php artisan preset:install` is interactive — pick any of the four groups:
+`php artisan preset:install` is interactive — pick any of the five groups:
 
 ### `configs` — lint / format / static analysis
 
@@ -62,15 +62,33 @@ starter kit.
 
 `config.allow-plugins` gets `pestphp/pest-plugin` so the pest plugins can boot.
 
-Composer scripts added: `lint`, `analyse`, `refactor`, `type`, `coverage`,
-`tests`, `check:lint`, `check:refactor`, `php-checks`, `node-checks`,
-`cleanup`.
+Composer scripts added: `lint`, `analyse`, `refactor`, `tia`, `type`,
+`coverage`, `tests`, `check:lint`, `check:refactor`, `php-checks`,
+`node-checks`, `cleanup`.
 
 - `composer cleanup` → Pint, Pest (90% coverage + type-coverage), PHPStan,
   Rector dry-run.
+- `composer tia` → `pest --tia`, re-running only the tests affected by the
+  change. Used by the Lefthook pre-commit hook.
+
+The `tia` script is what the optional Lefthook pre-commit hook runs.
 
 npm deps and scripts are **not** touched — the starter kit already provides
 ESLint, Prettier, TypeScript and their `lint`/`format`/`types:check` scripts.
+
+### `lefthook` — pre-commit hooks (opt-in)
+
+Copies `lefthook.yml`: a parallel `pre-commit` running `composer tia`,
+`composer lint` and `composer node-checks`. The commands are prefixed with
+`vendor/bin/sail` only when Sail is detected in the project; otherwise the
+prefix is stripped from the copied file.
+
+**Opt-in** — unlike the other groups it is never selected by default: pass
+`--lefthook`, or tick it in the interactive prompt.
+
+Lefthook is not a composer package: install the binary once per machine
+(`brew install lefthook`, or `npm i -D lefthook`), then run `lefthook install`
+in the project to wire up `.git/hooks`.
 
 ### `github` — CI workflows
 

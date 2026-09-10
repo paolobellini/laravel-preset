@@ -22,12 +22,56 @@ it('copies only the three tooling configs', function () {
         ->and($this->appBase.'/phpstan.neon')->toBeFile()
         ->and($this->appBase.'/rector.php')->toBeFile()
         ->and($this->appBase.'/config/essentials.php')->toBeFile()
+        ->and($this->appBase.'/lefthook.yml')->not->toBeFile()
         ->and($this->appBase.'/eslint.config.js')->not->toBeFile()
         ->and($this->appBase.'/tsconfig.json')->not->toBeFile()
         ->and($this->appBase.'/.prettierrc')->not->toBeFile();
 
     expect(file_get_contents($this->appBase.'/config/essentials.php'))
         ->toContain('Unguard::class => true');
+});
+
+it('installs lefthook only when asked for', function () {
+    Artisan::call('preset:install', ['--no-interaction' => true]);
+
+    expect($this->appBase.'/lefthook.yml')->not->toBeFile()
+        ->and($this->appBase.'/pint.json')->toBeFile();
+});
+
+it('keeps the sail prefix in lefthook.yml when sail is configured', function () {
+    mkdir($this->appBase.'/vendor/bin', 0777, true);
+    file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
+    file_put_contents($this->appBase.'/compose.yaml', "services: {}\n");
+
+    Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/lefthook.yml'))
+        ->toContain('vendor/bin/sail composer tia')
+        ->toContain('vendor/bin/sail composer lint')
+        ->toContain('vendor/bin/sail composer node-checks');
+});
+
+it('strips the sail prefix from lefthook.yml when sail is not installed', function () {
+    Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
+
+    $lefthook = file_get_contents($this->appBase.'/lefthook.yml');
+
+    expect($lefthook)->not->toContain('vendor/bin/sail')
+        ->and($lefthook)->toContain('run: composer tia')
+        ->and($lefthook)->toContain('run: composer lint')
+        ->and($lefthook)->toContain('run: composer node-checks');
+});
+
+it('strips the sail prefix when sail is installed but not configured', function () {
+    mkdir($this->appBase.'/vendor/bin', 0777, true);
+    file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
+    // no compose.yaml / docker-compose.yml
+
+    Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/lefthook.yml'))
+        ->not->toContain('vendor/bin/sail')
+        ->toContain('run: composer tia');
 });
 
 it('copies only the .ai conventions, nothing else', function () {
@@ -93,7 +137,7 @@ it('merges composer scripts and allows the pest plugin without npm scripts', fun
 
     $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
 
-    expect($composer['scripts'])->toHaveKeys(['cleanup', 'php-checks', 'post-autoload-dump'])
+    expect($composer['scripts'])->toHaveKeys(['cleanup', 'php-checks', 'tia', 'post-autoload-dump'])
         // ide-helper is no longer part of the preset
         ->and($composer['scripts'])->not->toHaveKey('ide-helper')
         ->and($composer['config']['allow-plugins'])->toHaveKey('pestphp/pest-plugin')

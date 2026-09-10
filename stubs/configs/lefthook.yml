@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: tia
+      run: vendor/bin/sail composer tia
+
+    - name: lint
+      run: vendor/bin/sail composer lint
+
+    - name: node
+      run: vendor/bin/sail composer node-checks

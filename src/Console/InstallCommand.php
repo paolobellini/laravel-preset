@@ -17,6 +17,7 @@ final class InstallCommand extends Command
         {--ai : Install the .ai conventions and guidelines}
         {--scripts : Install composer quality scripts}
         {--github : Install GitHub Actions workflows (calls the bellini.one reusable workflows)}
+        {--lefthook : Install the lefthook pre-commit config (opt-in)}
         {--force : Overwrite files that already exist}
         {--no-install : Write the new dependencies into composer.json without installing them}';
 
@@ -35,6 +36,14 @@ final class InstallCommand extends Command
     ];
 
     /**
+     * Lefthook stub => destination path, relative to the project root. Opt-in,
+     * so it is not part of self::CONFIG_FILES.
+     */
+    private const LEFTHOOK_STUB = 'configs/lefthook.yml';
+
+    private const LEFTHOOK_FILE = 'lefthook.yml';
+
+    /**
      * AI stub directory => destination directory, relative to the project root.
      *
      * @var array<string, string>
@@ -51,6 +60,11 @@ final class InstallCommand extends Command
     private const GITHUB_DIRS = [
         'github' => '.github',
     ];
+
+    /**
+     * Sail binary, relative to the project root.
+     */
+    private const SAIL_BINARY = 'vendor/bin/sail';
 
     /**
      * Starter-kit workflows superseded by the preset, removed before copying.
@@ -115,6 +129,7 @@ final class InstallCommand extends Command
      */
     private const COMPOSER_SCRIPTS = [
         'lint' => 'pint --parallel',
+        'tia' => 'pest --tia',
         'type' => 'pest --type-coverage --min=90 --memory-limit=2G',
         'coverage' => 'pest --coverage --min=90',
         'refactor' => 'rector',
@@ -153,11 +168,18 @@ final class InstallCommand extends Command
             $this->installGithub($files);
         }
 
+        if (in_array('lefthook', $groups, true)) {
+            $this->installLefthook($files);
+        }
+
         $this->newLine();
         $this->components->info('Preset installed.');
         $this->components->bulletList(array_values(array_filter([
             $this->option('no-install') ? 'Run <fg=cyan>composer update</> to pull the new PHP dependencies.' : null,
             'Run <fg=cyan>composer cleanup</> to verify everything passes.',
+            in_array('lefthook', $groups, true)
+                ? 'Run <fg=cyan>lefthook install</> to wire up the git hooks.'
+                : null,
         ])));
 
         return self::SUCCESS;
@@ -168,7 +190,7 @@ final class InstallCommand extends Command
      */
     private function runComposer(Filesystem $files, array $arguments): bool
     {
-        $binary = $this->usesSail($files) ? './vendor/bin/sail composer' : 'composer';
+        $binary = $this->usesSail($files) ? './'.self::SAIL_BINARY.' composer' : 'composer';
         $command = $binary.' '.implode(' ', $arguments);
 
         $this->newLine();
@@ -191,7 +213,7 @@ final class InstallCommand extends Command
 
     private function usesSail(Filesystem $files): bool
     {
-        if (! $files->exists($this->basePath('vendor/bin/sail'))) {
+        if (! $files->exists($this->basePath(self::SAIL_BINARY))) {
             return false;
         }
 
@@ -204,7 +226,10 @@ final class InstallCommand extends Command
      */
     private function resolveGroups(): array
     {
-        $available = ['configs', 'ai', 'scripts', 'github'];
+        $available = ['configs', 'ai', 'scripts', 'github', 'lefthook'];
+
+        // Lefthook is opt-in: offered, but never selected unless asked for.
+        $default = ['configs', 'ai', 'scripts', 'github'];
 
         $flagged = array_values(array_filter(
             $available,
@@ -216,7 +241,7 @@ final class InstallCommand extends Command
         }
 
         if (! $this->input->isInteractive()) {
-            return $available;
+            return $default;
         }
 
         /** @var array<int, string> $selected */
@@ -227,8 +252,9 @@ final class InstallCommand extends Command
                 'ai' => 'The .ai conventions and guidelines',
                 'scripts' => 'Composer quality scripts',
                 'github' => 'GitHub Actions workflows (bellini.one reusable workflows)',
+                'lefthook' => 'Lefthook pre-commit hooks (requires the lefthook binary)',
             ],
-            default: $available,
+            default: $default,
             required: true,
         );
 
@@ -240,6 +266,15 @@ final class InstallCommand extends Command
         $this->components->task('Copying tooling configs', function () use ($files): void {
             foreach (self::CONFIG_FILES as $stub => $destination) {
                 $this->copyFile($files, $stub, $destination);
+            }
+        });
+    }
+
+    private function installLefthook(Filesystem $files): void
+    {
+        $this->components->task('Copying the lefthook config', function () use ($files): void {
+            if ($this->copyFile($files, self::LEFTHOOK_STUB, self::LEFTHOOK_FILE)) {
+                $this->stripSailFromLefthook($files, self::LEFTHOOK_FILE);
             }
         });
     }
@@ -342,7 +377,7 @@ final class InstallCommand extends Command
         ));
     }
 
-    private function copyFile(Filesystem $files, string $stub, string $destination): void
+    private function copyFile(Filesystem $files, string $stub, string $destination): bool
     {
         $target = $this->basePath($destination);
         $source = $this->stubPath($stub);
@@ -350,11 +385,34 @@ final class InstallCommand extends Command
         if ($files->exists($target) && ! $this->option('force')) {
             $this->line("  <fg=yellow>skipped</> {$destination} (exists, use --force)");
 
-            return;
+            return false;
         }
 
         $files->ensureDirectoryExists(dirname($target));
         $files->copy($source, $target);
+
+        return true;
+    }
+
+    /**
+     * The stub drives the hooks through Sail. Without Sail the commands run
+     * directly, so the prefix is stripped from the copied file.
+     */
+    private function stripSailFromLefthook(Filesystem $files, string $destination): void
+    {
+        if ($this->usesSail($files)) {
+            return;
+        }
+
+        $target = $this->basePath($destination);
+
+        $files->put($target, str_replace(
+            self::SAIL_BINARY.' composer ',
+            'composer ',
+            $files->get($target),
+        ));
+
+        $this->line('  <fg=yellow>adjusted</> '.$destination.' (sail not detected, using plain composer)');
     }
 
     private function copyDirectory(Filesystem $files, string $stub, string $destination): void

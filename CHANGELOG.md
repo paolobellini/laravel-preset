@@ -42,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **lefthook** — a fifth, **opt-in** group (`--lefthook`, offered but never
+  pre-selected in the prompt) copying `lefthook.yml`: a parallel `pre-commit`
+  running `composer tia`, `composer lint` and `composer node-checks`. The
+  commands are prefixed with `vendor/bin/sail` only when Sail is detected in the
+  project; otherwise the prefix is stripped from the copied file. Lefthook has
+  no composer package — install the binary and run `lefthook install` once.
+- **scripts** — `tia` composer script (`pest --tia`), re-running only the tests
+  affected by the change.
 - **scripts** — `pestphp/pest-plugin-rector`, `pestphp/pest-plugin-phpstan`,
   `pestphp/pest-plugin-evals`, `pestphp/pest-plugin-agent`,
   `pestphp/pest-plugin-faker` and `pestphp/pest-plugin-mutate` to `require-dev`.
