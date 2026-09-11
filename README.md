@@ -30,7 +30,9 @@ Copies the configs not already in the starter kit:
 |------|------|
 | `pint.json` | Laravel Pint (strict types, final classes, phpdoc-only types) |
 | `phpstan.neon` | Larastan level 7 + the pest-plugin-phpstan and phpstan-safe-rule extensions |
-| `rector.php` | Rector + rector-laravel sets + `PestSetList::CODING_STYLE` |
+| `rector.php` | Rector + rector-laravel sets, scoped to `app/` and `database/` |
+| `rector-tests.php` | Rector for `tests/` — `LARAVEL_TESTING` + `PestSetList::CODING_STYLE` |
+| `psalm.xml` | Psalm, scoped to taint analysis only (`errorLevel="8"`) |
 | `config/essentials.php` | nunomaduro/essentials — custom overrides (`Unguard => true`, inverse of the package default) |
 
 ### `ai` — conventions
@@ -54,7 +56,8 @@ Added to `require-dev` (anything already required is left untouched, use
 `larastan/larastan`, `laravel/pint`, `laravel/boost`, `laravel/pail`,
 `rector/rector`, `driftingly/rector-laravel`, `pestphp/pest` and the
 `pest-plugin-{type-coverage,mutate,rector,phpstan,evals,agent,faker}` plugins,
-`thecodingmachine/phpstan-safe-rule`, `spatie/laravel-typescript-transformer`.
+`thecodingmachine/phpstan-safe-rule`, `spatie/laravel-typescript-transformer`,
+`vimeo/psalm`.
 `nunomaduro/essentials`, `spatie/laravel-data`, `spatie/laravel-query-builder`
 and `thecodingmachine/safe` go into `require`. `nunomaduro/collision` and
 `pestphp/pest-plugin-laravel` are **not** added — they already ship with the
@@ -62,26 +65,64 @@ starter kit.
 
 `config.allow-plugins` gets `pestphp/pest-plugin` so the pest plugins can boot.
 
-Composer scripts added: `lint`, `analyse`, `refactor`, `tia`, `type`,
-`coverage`, `tests`, `check:lint`, `check:refactor`, `php-checks`,
-`node-checks`, `cleanup`.
+Composer scripts are layered so a tool is declared once:
 
-- `composer cleanup` → Pint, Pest (90% coverage + type-coverage), PHPStan,
-  Rector dry-run.
-- `composer tia` → `pest --tia`, re-running only the tests affected by the
-  change. Used by the Lefthook pre-commit hook.
+- **leaf** — one tool each: `pint`, `pint:dry`, `rector`, `rector:dry`,
+  `rector:test`, `rector:test:dry`, `stan`, `taint`, `test`,
+  `test:type-coverage`, `test:coverage`, `test:mutate`, `update-shards`.
+- **groups** — `analyse:static` (pint + stan + rector on `app/`),
+  `analyse` (`analyse:static` + `taint`), `tests` (type-coverage + coverage),
+  `ci:node` (npm lint/format/types).
+- **entry points** — `ci` (`ci:php` + `ci:node`), `ci:php` (`analyse` +
+  `tests`), `pre-push` (`rector:test:dry` + `test:mutate`), `pre-commit`
+  (`analyse:static` + `test` + `ci:node`, the by-hand equivalent of the hook).
 
-The `tia` script is what the optional Lefthook pre-commit hook runs.
+Entry points compose groups and never re-list a leaf, so adding a tool means
+editing one group.
+
+**CI and `pre-push` are deliberately disjoint.** CI owns the application
+contract — pint, stan, taint, rector over `app/`, coverage, type-coverage — so
+it is asynchronous and cannot be bypassed. `pre-push` owns test-suite quality:
+the mutation score and rector over `tests/`, the two slowest checks and the two
+whose audience is the author. Nothing runs twice.
+
+Every script that boots the application (`test:*`) is prefixed with
+`@php artisan config:clear --ansi @no_additional_args` — a cached
+`bootstrap/cache/config.php` silently overrides `config/` and `.env`, and
+`@no_additional_args` stops Composer from appending your own options to
+`config:clear`. The lint/analysis scripts do not boot the app and skip it.
+
+- `composer taint` → `psalm --taint-analysis --no-cache`. Psalm is installed
+  **only** for this: PHPStan/Larastan stays the static analyser, and `psalm.xml`
+  runs at the most permissive error level so the report is about tainted input
+  reaching a sink, not about typing.
+- `composer test:mutate` → `pest --parallel --mutate --covered-only --min=65`,
+  with `Composer\Config::disableProcessTimeout` so a long mutation run is not
+  killed at Composer's 300s limit.
 
 npm deps and scripts are **not** touched — the starter kit already provides
 ESLint, Prettier, TypeScript and their `lint`/`format`/`types:check` scripts.
 
 ### `lefthook` — pre-commit hooks (opt-in)
 
-Copies `lefthook.yml`: a parallel `pre-commit` running `composer tia`,
-`composer lint` and `composer node-checks`. The commands are prefixed with
-`vendor/bin/sail` only when Sail is detected in the project; otherwise the
-prefix is stripped from the copied file.
+Copies `lefthook.yml`, with two hooks and one job per tool — granular on
+purpose, since lefthook only parallelises what it sees as separate jobs and a
+failure in one still reports the others.
+
+- **`pre-commit`** is scoped to `{staged_files}` with a `glob` per job, so a
+  commit touching one `.vue` never starts a PHP job. Pint, Prettier and ESLint
+  *fix* and re-stage (`stage_fixed`) instead of failing, so a commit is never
+  blocked by formatting; PHPStan analyses the staged files and Pest runs with
+  the coverage gate (cheap locally, since TIA replays everything untouched).
+- **`pre-push`** runs only what CI does not: `rector:test:dry` and
+  `test:mutate`.
+
+Passing paths to PHPStan and Rector narrows them to those files — an error
+caused elsewhere will not show up until CI. That is the trade that keeps the
+commit hook fast.
+
+The commands are prefixed with `vendor/bin/sail` only when Sail is detected in
+the project; otherwise the prefix is stripped from the copied file.
 
 **Opt-in** — unlike the other groups it is never selected by default: pass
 `--lefthook`, or tick it in the interactive prompt.

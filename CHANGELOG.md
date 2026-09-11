@@ -50,6 +50,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no composer package — install the binary and run `lefthook install` once.
 - **scripts** — `tia` composer script (`pest --tia`), re-running only the tests
   affected by the change.
+- **scripts** — `vimeo/psalm` to `require-dev` and a `taint` composer script
+  (`psalm --taint-analysis --no-cache`). Psalm is scoped to taint analysis only —
+  PHPStan/Larastan remains the static analyser.
+- **configs** — `rector-tests.php`: Rector for `tests/` (`LARAVEL_TESTING` +
+  `PestSetList::CODING_STYLE`). `rector.php` is now scoped to `app/` and
+  `database/`, so the two configs no longer process the test suite twice.
+- **configs** — `psalm.xml`, scoped to `app/` and `routes/` at `errorLevel="8"`
+  so a taint run reports tainted input rather than a second opinion on typing.
+- **scripts** — `mutate` composer script (`pest --mutate --covered-only
+  --parallel`), prefixed with `Composer\Config::disableProcessTimeout` so a long
+  run is not killed at Composer's 300s process timeout.
+- **scripts** — the scripts are layered: leaf (one tool), groups
+  (`analyse:static`, `analyse`, `tests`, `ci:node`) and entry points
+  (`pre-commit`, `pre-push`, `ci:php`, `ci`). Entry points compose groups and
+  never re-list a leaf script, so a new tool is declared in one place. CI and
+  `pre-push` are disjoint: CI owns the application contract, `pre-push` owns
+  test-suite quality (`test:mutate` and `rector:test:dry`), and nothing runs
+  twice. New `test` leaf script (`pest --parallel`) for the commit hook, which
+  needs the suite without a coverage gate.
+- **lefthook** — `pre-commit` is now scoped to `{staged_files}` with a per-job
+  `glob`; Pint, Prettier and ESLint fix and re-stage (`stage_fixed`) instead of
+  failing; and a `pre-push` hook runs the mutation score and rector over
+  `tests/`.
+- **ai** — `workflow.md` — the post-step check is `composer analyse:static` +
+  `composer tests`; a failure is never worked around by weakening the tooling
+  (no lowered `--min`, no baseline, no `@phpstan-ignore`, no excluded file); and
+  `laravel/pao` is never disabled (`PAO_DISABLE`, provider or plugin removal).
+- **ai** — `commits.md` — the commit title must cover every uncommitted change
+  in the working tree, not just the last edit; unrelated work is proposed as a
+  separate commit instead.
+- **scripts** — every script that boots the application (`tia`, `type`,
+  `coverage`, `mutate`) now runs
+  `@php artisan config:clear --ansi @no_additional_args` first: a cached config
+  silently overrides `config/` and `.env`, and `@no_additional_args` (Composer
+  2.8+) keeps user-passed options from being appended to `config:clear`. The
+  lint/analysis scripts are untouched — they do not boot the app.
 - **scripts** — `pestphp/pest-plugin-rector`, `pestphp/pest-plugin-phpstan`,
   `pestphp/pest-plugin-evals`, `pestphp/pest-plugin-agent`,
   `pestphp/pest-plugin-faker` and `pestphp/pest-plugin-mutate` to `require-dev`.

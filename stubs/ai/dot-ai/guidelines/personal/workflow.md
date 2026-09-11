@@ -18,9 +18,28 @@ so each step can be validated, committed, then move to the next.
 
 After building any new feature, fix, or refactor:
 
-1. Run `composer cleanup` (Pint, Pest type-coverage min 90%, Pest coverage
-   min 90%, PHPStan, Rector dry-run).
+1. Run `composer analyse:static` (Pint, PHPStan, Rector dry-run) and
+   `composer tests` (Pest type-coverage min 95%, Pest coverage min 90%).
 2. **If anything fails or is not working, report it** — do not produce a commit
    message.
 3. **If everything passes, return a commit message** following the commit
    conventions — subject line only, no description.
+
+Never work around a failure by weakening the tooling. Do not lower a `--min`
+threshold, add a PHPStan baseline entry or `@phpstan-ignore`, exclude a file
+from Pint or Rector, or disable a rule to make the run green. Fix the code, or
+report the failure and stop.
+
+## Never Disable `laravel/pao`
+
+`laravel/pao` ships with the starter kit and reshapes the output of Pest,
+PHPUnit, Paratest, PHPStan and Rector when it detects that an agent is running
+the command. It is what makes those runs readable to you in the first place.
+
+- Never set `PAO_DISABLE`, in the environment, in `.env`, in `phpunit.xml` or
+  inline before a command.
+- Never remove the package, and never drop its service provider or its Pest
+  plugin from `composer.json`.
+- Truncated or unexpected tool output is not a reason to turn it off. Read what
+  it gave you, or run the underlying command again — do not change how the
+  output is produced.

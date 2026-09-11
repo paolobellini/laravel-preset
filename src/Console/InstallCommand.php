@@ -32,7 +32,9 @@ final class InstallCommand extends Command
         'configs/pint.json' => 'pint.json',
         'configs/phpstan.neon' => 'phpstan.neon',
         'configs/rector.php' => 'rector.php',
+        'configs/rector-tests.php' => 'rector-tests.php',
         'configs/essentials.php' => 'config/essentials.php',
+        'configs/psalm.xml' => 'psalm.xml',
     ];
 
     /**
@@ -113,6 +115,7 @@ final class InstallCommand extends Command
         'rector/rector',
         'spatie/laravel-typescript-transformer',
         'thecodingmachine/phpstan-safe-rule',
+        'vimeo/psalm',
     ];
 
     /**
@@ -125,21 +128,44 @@ final class InstallCommand extends Command
     ];
 
     /**
+     * Dropped in front of every script that boots the application: a cached
+     * config silently overrides config/ and .env, and the run would use it.
+     * The trailing directive (Composer 2.8+) keeps `composer <script> --filter=x`
+     * from appending the option to config:clear, which would reject it.
+     */
+    private const CLEAR_CONFIG = '@php artisan config:clear --ansi @no_additional_args';
+
+    /**
      * @var array<string, string|array<int, string>>
      */
     private const COMPOSER_SCRIPTS = [
-        'lint' => 'pint --parallel',
-        'tia' => 'pest --tia',
-        'type' => 'pest --type-coverage --min=90 --memory-limit=2G',
-        'coverage' => 'pest --coverage --min=90',
-        'refactor' => 'rector',
-        'analyse' => 'phpstan analyse --memory-limit=2G',
-        'check:lint' => 'pint --parallel --test',
-        'check:refactor' => 'rector --dry-run',
-        'tests' => ['@type', '@coverage'],
-        'php-checks' => ['@check:lint', '@analyse', '@check:refactor'],
-        'node-checks' => ['npm run lint:check', 'npm run format:check', 'npm run types:check'],
-        'cleanup' => ['@lint', '@tests', '@analyse', '@check:refactor'],
+        'pint' => 'pint --parallel',
+        'pint:dry' => 'pint --parallel --test',
+        'rector' => 'rector',
+        'rector:test' => 'rector --config=rector-tests.php',
+        'rector:dry' => 'rector --dry-run',
+        'rector:test:dry' => 'rector --config=rector-tests.php --dry-run',
+        'stan' => 'phpstan analyse --memory-limit=-1',
+        'taint' => 'psalm --taint-analysis --no-cache',
+        'test' => [self::CLEAR_CONFIG, 'pest --parallel'],
+        'test:type-coverage' => [self::CLEAR_CONFIG, 'pest --parallel --type-coverage --min=95 --memory-limit=-1'],
+        'test:coverage' => [self::CLEAR_CONFIG, 'pest --parallel --coverage --min=90'],
+        'test:mutate' => [
+            'Composer\\Config::disableProcessTimeout',
+            self::CLEAR_CONFIG,
+            'pest --parallel --mutate --covered-only --min=65',
+        ],
+        'update-shards' => 'pest --update-shards',
+
+        'analyse:static' => ['@pint:dry', '@stan', '@rector:dry'],
+        'analyse' => ['@analyse:static', '@taint'],
+        'tests' => ['@test:type-coverage', '@test:coverage'],
+        'ci:node' => ['npm run lint:check', 'npm run format:check', 'npm run types:check'],
+
+        'pre-commit' => ['@analyse:static', '@test', '@ci:node'],
+        'pre-push' => ['@rector:test:dry', '@test:mutate'],
+        'ci:php' => ['@analyse', '@tests'],
+        'ci' => ['@ci:php', '@ci:node'],
     ];
 
     public function handle(Filesystem $files): int

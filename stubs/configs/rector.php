@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Pest\Rector\Set\PestSetList;
 use Rector\Config\RectorConfig;
 use RectorLaravel\Rector\FuncCall\RemoveDumpDataDeadCodeRector;
 use RectorLaravel\Rector\StaticCall\CarbonToDateFacadeRector;
@@ -10,10 +9,11 @@ use RectorLaravel\Rector\StaticCall\DispatchToHelperFunctionsRector;
 use RectorLaravel\Set\LaravelSetList;
 use RectorLaravel\Set\LaravelSetProvider;
 
+// Application code. The test suite has its own config: rector-tests.php.
 return RectorConfig::configure()
     ->withPaths([
         __DIR__.'/app',
-        __DIR__.'/tests',
+        __DIR__.'/database',
     ])
     ->withSetProviders(LaravelSetProvider::class)
     ->withComposerBased(laravel: true)
@@ -31,9 +31,7 @@ return RectorConfig::configure()
         LaravelSetList::LARAVEL_FACTORIES,
         LaravelSetList::LARAVEL_IF_HELPERS,
         LaravelSetList::LARAVEL_LEGACY_FACTORIES_TO_CLASSES,
-        LaravelSetList::LARAVEL_TESTING,
         LaravelSetList::LARAVEL_TYPE_DECLARATIONS,
-        PestSetList::CODING_STYLE,
     ])
     ->withSkip([
         CarbonToDateFacadeRector::class,

@@ -21,7 +21,9 @@ it('copies only the three tooling configs', function () {
     expect($this->appBase.'/pint.json')->toBeFile()
         ->and($this->appBase.'/phpstan.neon')->toBeFile()
         ->and($this->appBase.'/rector.php')->toBeFile()
+        ->and($this->appBase.'/rector-tests.php')->toBeFile()
         ->and($this->appBase.'/config/essentials.php')->toBeFile()
+        ->and($this->appBase.'/psalm.xml')->toBeFile()
         ->and($this->appBase.'/lefthook.yml')->not->toBeFile()
         ->and($this->appBase.'/eslint.config.js')->not->toBeFile()
         ->and($this->appBase.'/tsconfig.json')->not->toBeFile()
@@ -46,9 +48,10 @@ it('keeps the sail prefix in lefthook.yml when sail is configured', function () 
     Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
 
     expect(file_get_contents($this->appBase.'/lefthook.yml'))
-        ->toContain('vendor/bin/sail composer tia')
-        ->toContain('vendor/bin/sail composer lint')
-        ->toContain('vendor/bin/sail composer node-checks');
+        ->toContain('vendor/bin/sail composer pint -- {staged_files}')
+        ->toContain('vendor/bin/sail composer stan -- {staged_files}')
+        ->toContain('vendor/bin/sail composer test:coverage')
+        ->toContain('vendor/bin/sail composer test:mutate');
 });
 
 it('strips the sail prefix from lefthook.yml when sail is not installed', function () {
@@ -57,9 +60,9 @@ it('strips the sail prefix from lefthook.yml when sail is not installed', functi
     $lefthook = file_get_contents($this->appBase.'/lefthook.yml');
 
     expect($lefthook)->not->toContain('vendor/bin/sail')
-        ->and($lefthook)->toContain('run: composer tia')
-        ->and($lefthook)->toContain('run: composer lint')
-        ->and($lefthook)->toContain('run: composer node-checks');
+        ->and($lefthook)->toContain('run: composer pint -- {staged_files}')
+        ->and($lefthook)->toContain('run: composer stan -- {staged_files}')
+        ->and($lefthook)->toContain('run: composer test:mutate');
 });
 
 it('strips the sail prefix when sail is installed but not configured', function () {
@@ -71,7 +74,7 @@ it('strips the sail prefix when sail is installed but not configured', function 
 
     expect(file_get_contents($this->appBase.'/lefthook.yml'))
         ->not->toContain('vendor/bin/sail')
-        ->toContain('run: composer tia');
+        ->toContain('run: composer pint -- {staged_files}');
 });
 
 it('copies only the .ai conventions, nothing else', function () {
@@ -137,7 +140,20 @@ it('merges composer scripts and allows the pest plugin without npm scripts', fun
 
     $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
 
-    expect($composer['scripts'])->toHaveKeys(['cleanup', 'php-checks', 'tia', 'post-autoload-dump'])
+    expect($composer['scripts'])->toHaveKeys(['ci', 'pre-commit', 'pre-push', 'test:mutate', 'post-autoload-dump'])
+        // entry points compose groups, they never re-list a leaf script
+        ->and($composer['scripts']['ci:php'])->toBe(['@analyse', '@tests'])
+        ->and($composer['scripts']['analyse'])->toBe(['@analyse:static', '@taint'])
+        // pre-push owns what CI deliberately skips, and duplicates none of it
+        ->and($composer['scripts']['pre-push'])->toBe(['@rector:test:dry', '@test:mutate'])
+        ->and($composer['scripts']['tests'])->not->toContain('@test:mutate')
+        ->and($composer['scripts']['analyse:static'])->not->toContain('@rector:test:dry')
+        // app-booting scripts clear a cached config first, without inheriting extra args
+        ->and($composer['scripts']['test:coverage'][0])->toBe('@php artisan config:clear --ansi @no_additional_args')
+        ->and($composer['scripts']['test:mutate'][0])->toBe('Composer\\Config::disableProcessTimeout')
+        // static-analysis scripts do not boot the app, so no clear
+        ->and($composer['scripts']['pint'])->toBe('pint --parallel')
+        ->and($composer['scripts']['taint'])->toBe('psalm --taint-analysis --no-cache')
         // ide-helper is no longer part of the preset
         ->and($composer['scripts'])->not->toHaveKey('ide-helper')
         ->and($composer['config']['allow-plugins'])->toHaveKey('pestphp/pest-plugin')
@@ -169,6 +185,7 @@ it('requires the preset dependencies unconstrained so composer resolves the late
             && str_contains($process->command, 'rector/rector')
             && str_contains($process->command, 'thecodingmachine/phpstan-safe-rule')
             && str_contains($process->command, 'spatie/laravel-typescript-transformer')
+            && str_contains($process->command, 'vimeo/psalm')
             // dropped from the preset
             && ! str_contains($process->command, 'barryvdh/laravel-ide-helper')
             // no explicit versions, ever

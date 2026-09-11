@@ -1,11 +1,41 @@
+# Granular jobs on purpose: lefthook only parallelises what it sees as separate
+# jobs, and a failure in one still reports the others.
+#
+# pre-commit is scoped to {staged_files} — it must stay fast enough to run on
+# every commit. pre-push runs only what CI does not: mutation score and rector
+# over tests/. Everything else (pint, stan, taint, rector on app/, coverage,
+# type-coverage) is CI's job, where it is asynchronous and cannot be bypassed.
 pre-commit:
   parallel: true
   jobs:
-    - name: tia
-      run: vendor/bin/sail composer tia
+    - name: pint
+      glob: "*.php"
+      run: vendor/bin/sail composer pint -- {staged_files}
+      stage_fixed: true
 
-    - name: lint
-      run: vendor/bin/sail composer lint
+    - name: stan
+      glob: "*.php"
+      run: vendor/bin/sail composer stan -- {staged_files}
 
-    - name: node
-      run: vendor/bin/sail composer node-checks
+    - name: tests
+      glob: "*.php"
+      run: vendor/bin/sail composer test:coverage
+
+    - name: prettier
+      glob: "*.{js,ts,jsx,tsx,vue,css,json,md,yml,yaml}"
+      run: npx prettier --write {staged_files}
+      stage_fixed: true
+
+    - name: eslint
+      glob: "*.{js,ts,jsx,tsx,vue}"
+      run: npx eslint --fix {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: rector-tests
+      run: vendor/bin/sail composer rector:test:dry
+
+    - name: mutate
+      run: vendor/bin/sail composer test:mutate
