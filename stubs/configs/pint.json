@@ -1,15 +1,28 @@
 {
     "preset": "laravel",
     "rules": {
+        "braces_position": {
+            "allow_single_line_anonymous_functions": true,
+            "allow_single_line_empty_anonymous_classes": true,
+            "anonymous_classes_opening_brace": "same_line",
+            "anonymous_functions_opening_brace": "same_line",
+            "classes_opening_brace": "same_line",
+            "control_structures_opening_brace": "same_line",
+            "functions_opening_brace": "same_line"
+        },
+        "explicit_indirect_variable": true,
+        "explicit_string_variable": true,
+        "declare_strict_types": true,
+        "class_reference_name_casing": true,
+        "combine_consecutive_issets": true,
+        "assign_null_coalescing_to_coalesce_equal": true,
+        "final_class": true,
+        "modifier_keywords": true,
         "simplified_null_return": true,
-        "array_indentation": false,
         "new_with_parentheses": {
             "anonymous_class": true,
             "named_class": true
         },
-        "declare_strict_types": true,
-        "Pint/phpdoc_type_annotations_only": true,
-        "final_class": true,
-        "modifier_keywords": true
+        "Pint/phpdoc_type_annotations_only": true
     }
 }
