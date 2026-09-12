@@ -33,6 +33,47 @@ it('copies only the three tooling configs', function () {
         ->toContain('Unguard::class => true');
 });
 
+it('creates tests/Pest.php with tia enabled locally when the project has none', function () {
+    Artisan::call('preset:install', ['--configs' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/tests/Pest.php')->toBeFile();
+
+    expect(file_get_contents($this->appBase.'/tests/Pest.php'))
+        ->toContain('pest()->tia()->locally();')
+        ->toContain('pest()->extend(TestCase::class)')
+        ->toContain('->use(RefreshDatabase::class)')
+        ->toContain("->in('Feature', 'Unit');");
+});
+
+it('appends tia to an existing tests/Pest.php without touching its setup', function () {
+    mkdir($this->appBase.'/tests', 0777, true);
+    file_put_contents($this->appBase.'/tests/Pest.php', <<<'PHP'
+        <?php
+
+        uses(Tests\TestCase::class)->in('Feature');
+
+        function somethingCustom(): void {}
+
+        PHP);
+
+    Artisan::call('preset:install', ['--configs' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/tests/Pest.php'))
+        ->toContain('function somethingCustom(): void {}')
+        ->toContain("uses(Tests\TestCase::class)->in('Feature');")
+        ->toContain('pest()->tia()->locally();');
+});
+
+it('leaves tests/Pest.php alone when it already configures tia', function () {
+    mkdir($this->appBase.'/tests', 0777, true);
+    $original = "<?php\n\npest()->tia()->always();\n";
+    file_put_contents($this->appBase.'/tests/Pest.php', $original);
+
+    Artisan::call('preset:install', ['--configs' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/tests/Pest.php'))->toBe($original);
+});
+
 it('installs lefthook only when asked for', function () {
     Artisan::call('preset:install', ['--no-interaction' => true]);
 
@@ -141,23 +182,17 @@ it('merges composer scripts and allows the pest plugin without npm scripts', fun
     $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
 
     expect($composer['scripts'])->toHaveKeys(['ci', 'pre-commit', 'pre-push', 'test:mutate', 'post-autoload-dump'])
-        // entry points compose groups, they never re-list a leaf script
         ->and($composer['scripts']['ci:php'])->toBe(['@analyse', '@tests'])
         ->and($composer['scripts']['analyse'])->toBe(['@analyse:static', '@taint'])
-        // pre-push owns what CI deliberately skips, and duplicates none of it
         ->and($composer['scripts']['pre-push'])->toBe(['@rector:test:dry', '@test:mutate'])
         ->and($composer['scripts']['tests'])->not->toContain('@test:mutate')
         ->and($composer['scripts']['analyse:static'])->not->toContain('@rector:test:dry')
-        // app-booting scripts clear a cached config first, without inheriting extra args
         ->and($composer['scripts']['test:coverage'][0])->toBe('@php artisan config:clear --ansi @no_additional_args')
         ->and($composer['scripts']['test:mutate'][0])->toBe('Composer\\Config::disableProcessTimeout')
-        // static-analysis scripts do not boot the app, so no clear
         ->and($composer['scripts']['pint'])->toBe('pint --parallel')
         ->and($composer['scripts']['taint'])->toBe('psalm --taint-analysis --no-cache')
-        // ide-helper is no longer part of the preset
         ->and($composer['scripts'])->not->toHaveKey('ide-helper')
         ->and($composer['config']['allow-plugins'])->toHaveKey('pestphp/pest-plugin')
-        // constraints are resolved by composer require, never written by the preset
         ->and($composer['require'])->not->toHaveKey('nunomaduro/essentials')
         ->and($composer['require'])->not->toHaveKey('spatie/laravel-data')
         ->and($composer['require-dev'])->not->toHaveKey('rector/rector');
@@ -186,9 +221,7 @@ it('requires the preset dependencies unconstrained so composer resolves the late
             && str_contains($process->command, 'thecodingmachine/phpstan-safe-rule')
             && str_contains($process->command, 'spatie/laravel-typescript-transformer')
             && str_contains($process->command, 'vimeo/psalm')
-            // dropped from the preset
             && ! str_contains($process->command, 'barryvdh/laravel-ide-helper')
-            // no explicit versions, ever
             && ! str_contains($process->command, ':^');
     });
 });

@@ -9,7 +9,6 @@ use RectorLaravel\Rector\StaticCall\DispatchToHelperFunctionsRector;
 use RectorLaravel\Set\LaravelSetList;
 use RectorLaravel\Set\LaravelSetProvider;
 
-// Application code. The test suite has its own config: rector-tests.php.
 return RectorConfig::configure()
     ->withPaths([
         __DIR__.'/app',

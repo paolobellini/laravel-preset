@@ -45,6 +45,19 @@ final class InstallCommand extends Command
 
     private const LEFTHOOK_FILE = 'lefthook.yml';
 
+    private const PEST_STUB = 'configs/pest.php';
+
+    private const PEST_FILE = 'tests/Pest.php';
+
+    /**
+     * Appended to an existing tests/Pest.php that does not configure TIA yet.
+     */
+    private const PEST_TIA = <<<'PHP'
+
+        pest()->tia()->locally();
+
+        PHP;
+
     /**
      * AI stub directory => destination directory, relative to the project root.
      *
@@ -254,7 +267,6 @@ final class InstallCommand extends Command
     {
         $available = ['configs', 'ai', 'scripts', 'github', 'lefthook'];
 
-        // Lefthook is opt-in: offered, but never selected unless asked for.
         $default = ['configs', 'ai', 'scripts', 'github'];
 
         $flagged = array_values(array_filter(
@@ -294,6 +306,35 @@ final class InstallCommand extends Command
                 $this->copyFile($files, $stub, $destination);
             }
         });
+
+        $this->components->task('Configuring Pest', fn () => $this->configurePest($files));
+    }
+
+    /**
+     * Create tests/Pest.php when the project has none, otherwise append the TIA
+     * configuration to the one already there — it holds project-specific setup
+     * that must not be overwritten.
+     */
+    private function configurePest(Filesystem $files): void
+    {
+        $target = $this->basePath(self::PEST_FILE);
+
+        if (! $files->exists($target)) {
+            $this->copyFile($files, self::PEST_STUB, self::PEST_FILE);
+
+            return;
+        }
+
+        $contents = $files->get($target);
+
+        if (str_contains($contents, '->tia(')) {
+            $this->line('  <fg=yellow>skipped</> '.self::PEST_FILE.' (already configures tia)');
+
+            return;
+        }
+
+        $files->put($target, rtrim($contents, PHP_EOL).PHP_EOL.self::PEST_TIA);
+        $this->line('  <fg=green>patched</> '.self::PEST_FILE.' (tia enabled locally)');
     }
 
     private function installLefthook(Filesystem $files): void
@@ -370,7 +411,6 @@ final class InstallCommand extends Command
             return;
         }
 
-        // --no-update still writes the latest constraint, it only skips the install.
         $flags = ['--no-interaction'];
 
         if ($this->option('no-install')) {

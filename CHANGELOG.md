@@ -53,6 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **scripts** — `vimeo/psalm` to `require-dev` and a `taint` composer script
   (`psalm --taint-analysis --no-cache`). Psalm is scoped to taint analysis only —
   PHPStan/Larastan remains the static analyser.
+- **configs** — `tests/Pest.php` is created from a stub when the project has
+  none, and otherwise patched: `pest()->tia()->locally()` is appended to the
+  existing file, leaving its own setup untouched, and skipped entirely when TIA
+  is already configured. Test impact analysis stays local, so the commit hook
+  can afford a coverage run while CI keeps measuring the full suite.
 - **configs** — `rector-tests.php`: Rector for `tests/` (`LARAVEL_TESTING` +
   `PestSetList::CODING_STYLE`). `rector.php` is now scoped to `app/` and
   `database/`, so the two configs no longer process the test suite twice.

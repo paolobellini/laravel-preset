@@ -34,6 +34,7 @@ Copies the configs not already in the starter kit:
 | `rector-tests.php` | Rector for `tests/` — `LARAVEL_TESTING` + `PestSetList::CODING_STYLE` |
 | `psalm.xml` | Psalm, scoped to taint analysis only (`errorLevel="8"`) |
 | `config/essentials.php` | nunomaduro/essentials — custom overrides (`Unguard => true`, inverse of the package default) |
+| `tests/Pest.php` | created when missing (`extend(TestCase)` + `RefreshDatabase`), otherwise **patched** with `pest()->tia()->locally()` |
 
 ### `ai` — conventions
 
@@ -116,6 +117,13 @@ failure in one still reports the others.
   the coverage gate (cheap locally, since TIA replays everything untouched).
 - **`pre-push`** runs only what CI does not: `rector:test:dry` and
   `test:mutate`.
+
+`tests/Pest.php` is the one file the preset *patches* rather than copies: it
+holds project-specific setup, so an existing one only gets
+`pest()->tia()->locally()` appended (and nothing at all if it already configures
+TIA). That line is what makes the commit hook affordable — locally a run
+replays whatever the change did not touch, while CI still measures the full
+suite.
 
 Passing paths to PHPStan and Rector narrows them to those files — an error
 caused elsewhere will not show up until CI. That is the trade that keeps the

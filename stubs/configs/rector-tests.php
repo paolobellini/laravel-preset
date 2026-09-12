@@ -7,7 +7,6 @@ use Rector\Config\RectorConfig;
 use RectorLaravel\Set\LaravelSetList;
 use RectorLaravel\Set\LaravelSetProvider;
 
-// Test suite only. Application code has its own config: rector.php.
 return RectorConfig::configure()
     ->withPaths([
         __DIR__.'/tests',
