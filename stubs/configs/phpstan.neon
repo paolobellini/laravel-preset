@@ -14,3 +14,19 @@ parameters:
         - tests/
 
     level: 7
+
+    excludePaths:
+        analyse:
+            - database/migrations
+
+    parallel:
+        jobSize: 20
+        maximumNumberOfProcesses: 4
+        minimumNumberOfJobsPerProcess: 2
+
+    checkModelProperties: true
+    checkUninitializedProperties: true
+    checkDynamicProperties: true
+    checkMissingCallableSignature: true
+    checkTooWideReturnTypesInProtectedAndPublicMethods: true
+    inferPrivatePropertyTypeFromConstructor: true
