@@ -1,10 +1,28 @@
 name: analyse
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [ main, staging, dev ]
+
+permissions:
+  contents: read
 
 jobs:
   analyse:
-    uses: paolobellini/bellini.one/.github/workflows/laravel-lint.yml@v1.0
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v7
+
+      - name: setup app
+        uses: paolobellini/bellini.one/actions/laravel/setup-app@v1.0
+        with:
+          php-version: ${{ vars.PHP_VERSION || '8.5' }}
+          node-version: ${{ vars.NODE_VERSION || '24' }}
+
+      - name: pint, phpstan, rector, psalm taint
+        run: composer analyse
+
+      - name: eslint, prettier, tsc
+        if: ${{ !cancelled() }}
+        run: composer ci:node

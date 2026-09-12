@@ -56,7 +56,7 @@ php artisan typescript:transform --watch  # while developing
 ```
 
 - Regenerate whenever a `Data` object or an exported enum changes, and commit
-  the generated file — `composer node-checks` runs `npm run types:check`
+  the generated file — `composer ci:node` runs `npm run types:check`
   against it, so a stale file fails CI.
 - The generated file is written by the configured writer (by default a single
   `generated.d.ts`). Never edit it by hand.

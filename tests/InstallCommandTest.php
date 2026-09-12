@@ -143,7 +143,7 @@ it('copies only the .ai conventions, nothing else', function () {
         ->and($this->appBase.'/CLAUDE.md')->not->toBeFile();
 });
 
-it('copies the split github caller workflows', function () {
+it('copies the github workflows', function () {
     Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
 
     expect($this->appBase.'/.github/workflows/analyse.yml')->toBeFile()
@@ -152,12 +152,70 @@ it('copies the split github caller workflows', function () {
         ->and($this->appBase.'/.github/workflows/ci.yml')->not->toBeFile();
 
     expect(file_get_contents($this->appBase.'/.github/workflows/analyse.yml'))
-        ->toContain('paolobellini/bellini.one/.github/workflows/laravel-lint.yml@v1.0');
+        ->toContain('paolobellini/bellini.one/actions/laravel/setup-app@v1.0')
+        ->toContain('composer analyse')
+        ->toContain('composer ci:node');
     expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))
-        ->toContain('paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0');
+        ->toContain('paolobellini/bellini.one/actions/laravel/setup-app@v1.0')
+        ->toContain("image: \${{ vars.DB_IMAGE || 'mysql:8.0' }}")
+        ->toContain('composer tests');
     expect(file_get_contents($this->appBase.'/.github/workflows/security.yml'))
-        ->toContain('branches: [staging]')
-        ->toContain('paolobellini/bellini.one/actions/general/security@v1.0');
+        ->toContain('branches: [main, staging, dev]')
+        ->toContain('aquasecurity/trivy-action@v0.36.0')
+        ->toContain('severity: HIGH,CRITICAL');
+});
+
+it('replaces the tests workflow with the sharded variant when asked for', function () {
+    Artisan::call('preset:install', ['--github' => true, '--sharded' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))
+        ->toContain('matrix:')
+        ->toContain('shard: [1, 2, 3, 4]')
+        ->toContain('composer test -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}')
+        ->toContain('composer test:type-coverage');
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/update-shards.yml'))
+        ->toContain("cron: '17 4 * * 1'")
+        ->toContain('contents: write')
+        ->toContain('composer update-shards')
+        ->toContain('git push');
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))
+        ->not->toContain('composer tests');
+});
+
+it('shards an already installed tests workflow without --force', function () {
+    Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))->not->toContain('matrix:');
+
+    Artisan::call('preset:install', ['--github' => true, '--sharded' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))->toContain('shard: [1, 2, 3, 4]');
+});
+
+it('reverts to the single-job tests workflow with --force', function () {
+    Artisan::call('preset:install', ['--github' => true, '--sharded' => true, '--no-interaction' => true]);
+
+    Artisan::call('preset:install', ['--github' => true, '--force' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))
+        ->toContain('composer tests')
+        ->not->toContain('matrix:');
+});
+
+it('keeps the single-job tests workflow without --sharded', function () {
+    Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))
+        ->toContain('composer tests')
+        ->not->toContain('matrix:');
+});
+
+it('does not install the update-shards workflow without --sharded', function () {
+    Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.github/workflows/update-shards.yml')->not->toBeFile();
 });
 
 it('removes superseded starter-kit workflows', function () {
@@ -169,9 +227,8 @@ it('removes superseded starter-kit workflows', function () {
     Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
 
     expect($dir.'/lint.yml')->not->toBeFile();
-    // starter tests.yml replaced by ours (references the reusable workflow)
     expect(file_get_contents($dir.'/tests.yml'))
-        ->toContain('paolobellini/bellini.one/.github/workflows/laravel-test.yml@v1.0');
+        ->toContain('composer tests');
 });
 
 it('merges composer scripts and allows the pest plugin without npm scripts', function () {

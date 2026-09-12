@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **github** — `analyse.yml` and `tests.yml` no longer call the
+  `paolobellini/bellini.one` reusable workflows; the jobs are inlined and invoke
+  the preset's own composer scripts (`analyse` + `ci:node`, `tests`). The
+  reusable workflows referenced script names (`php-checks`, `node-checks`) that
+  the preset writes into each project's `composer.json`, so a rename here broke
+  CI in every project installed from an older tag, and no single tag could be
+  correct for all of them. Only `actions/laravel/setup-app@v1.0` — which names no
+  script — is still shared.
+- **github** — `tests.yml` no longer hardcodes MySQL: the service container
+  reads the `DB_CONNECTION`, `DB_IMAGE`, `DB_PORT` and `DB_OPTIONS` repository
+  variables and falls back to MySQL 8.0 when they are unset — the same four
+  knobs the reusable workflow exposed as `inputs`. The README lists the ready
+  value sets for MySQL, MariaDB and PostgreSQL.
+- **github** — `analyse.yml` and `tests.yml` read `php-version` / `node-version`
+  from the `PHP_VERSION` / `NODE_VERSION` repository variables, defaulting to
+  `8.5` / `24`, so both workflows always agree on the toolchain.
+- **github** — `security.yml` inlines the Trivy filesystem scan instead of
+  calling `actions/general/security@v1.0`, so severity and scanners are editable
+  per project. It also triggers on PRs targeting `main`, `staging` or `dev`
+  instead of `staging` only.
 - **scripts** — dependencies are no longer pinned in the preset. `preset:install`
   now adds them with `composer require` (no version constraint), so every install
   resolves the newest stable release instead of the constraint that happened to be
@@ -42,14 +62,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **github** — `--sharded` installs a matrix variant of `tests.yml` that splits
+  the suite across four jobs, each running
+  `composer test -- --shard=<n>/${{ strategy.job-total }}`; the denominator comes
+  from `strategy.job-total`, so the matrix line is the single place to widen it.
+  Type coverage stays a single job. `--sharded` also installs
+  `update-shards.yml`, a weekly (and manually dispatchable) job that runs
+  `composer update-shards` against the same database service and commits
+  `tests/.pest/shards.json` back when the timings changed, so the shards stay
+  balanced as the suite grows. It overwrites `tests.yml` instead of sitting next to it, so the
+  suite cannot run twice, and its stub lives outside `stubs/github/` so the
+  directory copy never picks it up by accident. The variant trades away the
+  coverage minimum, which cannot be enforced per shard.
 - **lefthook** — a fifth, **opt-in** group (`--lefthook`, offered but never
   pre-selected in the prompt) copying `lefthook.yml`: a parallel `pre-commit`
-  running `composer tia`, `composer lint` and `composer node-checks`. The
-  commands are prefixed with `vendor/bin/sail` only when Sail is detected in the
+  running pint, phpstan and the test suite on the staged PHP files plus prettier
+  and eslint on the staged front-end files, and a `pre-push` running
+  `composer rector:test:dry` and `composer test:mutate`. The commands are
+  prefixed with `vendor/bin/sail` only when Sail is detected in the
   project; otherwise the prefix is stripped from the copied file. Lefthook has
   no composer package — install the binary and run `lefthook install` once.
 - **scripts** — `tia` composer script (`pest --tia`), re-running only the tests
   affected by the change.
+- **scripts** — `update-shards` now clears the config cache and runs in parallel
+  like the other test scripts, instead of a bare `pest --update-shards`.
 - **scripts** — `vimeo/psalm` to `require-dev` and a `taint` composer script
   (`psalm --taint-analysis --no-cache`). Psalm is scoped to taint analysis only —
   PHPStan/Larastan remains the static analyser.

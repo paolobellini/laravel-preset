@@ -1,14 +1,19 @@
-name: tests
+name: update shards
 
 on:
-  pull_request:
-    branches: [ main, staging, dev ]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: update-shards
+  cancel-in-progress: false
 
 jobs:
-  tests:
+  update-shards:
     runs-on: ubuntu-latest
     env:
       DB_CONNECTION: ${{ vars.DB_CONNECTION || 'mysql' }}
@@ -42,5 +47,19 @@ jobs:
       - name: generate app key
         run: php artisan key:generate
 
-      - name: type coverage and test coverage
-        run: composer tests
+      - name: record test timings
+        run: composer update-shards
+
+      - name: commit shards.json
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/.pest/shards.json
+
+          if git diff --cached --quiet; then
+            echo 'shards.json unchanged' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git commit -m 'chore(tests): update shards.json'
+          git push

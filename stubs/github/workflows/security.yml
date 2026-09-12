@@ -2,7 +2,7 @@ name: security
 
 on:
   pull_request:
-    branches: [staging]
+    branches: [main, staging, dev]
 
 permissions:
   contents: read
@@ -14,5 +14,12 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@v7
 
-      - name: vulnerability scan
-        uses: paolobellini/bellini.one/actions/general/security@v1.0
+      - name: vulnerability and secret scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          ignore-unfixed: true
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL

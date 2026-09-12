@@ -142,15 +142,82 @@ in the project to wire up `.git/hooks`.
 ### `github` — CI workflows
 
 First removes the starter-kit `lint.yml` + `tests.yml` (superseded), then copies
-caller workflows that reference the reusable workflows / composite actions in
-[`paolobellini/bellini.one`](https://github.com/paolobellini/bellini.one):
+the workflows. Each job runs the composer scripts from the `scripts` group
+directly, so the commands and their definitions stay in this repo and cannot
+drift apart. Only the environment setup is shared, via the composite actions in
+[`paolobellini/bellini.one`](https://github.com/paolobellini/bellini.one).
 
-- `.github/workflows/analyse.yml` — on push to `main` / any PR, calls
-  `laravel-lint.yml@v1.0` (pint + rector + phpstan + node-checks).
-- `.github/workflows/tests.yml` — on push to `main` / any PR, calls
-  `laravel-test.yml@v1.0`.
-- `.github/workflows/security.yml` — on PR targeting `staging`, runs the
-  `actions/general/security@v1.0` Trivy scan.
+- `.github/workflows/analyse.yml` — on push to `main` / any PR, runs
+  `composer analyse` (pint, phpstan, rector, psalm taint) and `composer ci:node`.
+  The Node step carries `if: ${{ !cancelled() }}` so a PHP failure still reports
+  the front-end result in the same run; the job fails either way.
+- `.github/workflows/tests.yml` — on push to `main` / any PR, runs
+  `composer tests` (type coverage + coverage) against a database service
+  container. The engine comes from the `DB_CONNECTION`, `DB_IMAGE`, `DB_PORT`
+  and `DB_OPTIONS` repository variables, defaulting to MySQL 8.0 when they are
+  unset (see below).
+- `.github/workflows/security.yml` — on PR targeting `main`, `staging` or `dev`,
+  runs a Trivy filesystem scan failing on `HIGH,CRITICAL`. Trivy's default
+  scanners (`vuln` + `secret`) both apply; vulnerabilities with no fix available
+  are ignored.
+
+`analyse.yml` and `tests.yml` use `actions/laravel/setup-app@v1.0` to install
+PHP, Node, the composer/npm dependencies and the build; `security.yml` needs no
+setup. Both read the toolchain versions from the repository variables
+`PHP_VERSION` and `NODE_VERSION`, falling back to `8.5` and `24` when they are
+not set — so a version bump is a repo setting, not an edit in two files.
+Switching scan severity is still a per-project edit of the copied file.
+
+The database engine is four repository variables — unset means MySQL 8.0:
+
+| engine | `DB_CONNECTION` | `DB_IMAGE` | `DB_PORT` | `DB_OPTIONS` |
+|---|---|---|---|---|
+| MySQL | `mysql` | `mysql:8.0` | `3306` | `--health-cmd="mysqladmin ping -h 127.0.0.1" --health-interval=10s --health-timeout=5s --health-retries=5` |
+| MariaDB | `mariadb` | `mariadb:11` | `3306` | `--health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=5` |
+| PostgreSQL | `pgsql` | `postgres:17` | `5432` | `--health-cmd="pg_isready -U root" --health-interval=10s --health-timeout=5s --health-retries=5` |
+
+### Sharding a large suite
+
+`--sharded` swaps `tests.yml` for a variant that splits the suite across a
+matrix of jobs instead of running it in one. It replaces the file rather than
+adding a second one, so the suite is never run twice.
+
+- `type-coverage` stays a single job — `--type-coverage` is static analysis,
+  there is nothing to split and it needs no database.
+- `tests` fans out over four shards, each job running
+  `composer test -- --shard=<n>/<total>`. The total comes from
+  `strategy.job-total`, so widening the matrix line is the only edit needed —
+  the denominator follows on its own.
+
+Pest balances the shards from `tests/.pest/shards.json`, a file of recorded
+per-class timings. Without it, it chunks the test classes evenly and one shard
+ends up dominating the wall clock; Pest warns in the run output when the file is
+missing entries.
+
+`--sharded` therefore also installs `.github/workflows/update-shards.yml`, which
+regenerates it every Monday (and on demand via *Run workflow*): it runs
+`composer update-shards` against the same database service and commits the file
+back if it changed. Seed it once locally with `composer update-shards` so the
+first sharded runs are balanced too.
+
+The job needs `contents: write` and pushes to the default branch, so a branch
+protection rule that admits no exception will reject it — either allow the
+`github-actions[bot]` actor or drop the workflow and refresh the file by hand.
+Note also that `--update-shards` writes nothing when the suite fails, and that
+GitHub disables scheduled workflows after 60 days without repository activity.
+
+The sharded variant drops the `--coverage --min=90` gate: each job only sees its
+own slice, so a per-shard minimum is meaningless and the reports would have to be
+merged to be comparable. Shard only when the suite is big enough that this is
+worth losing.
+
+Branch protection needs updating too — the required check stops being `tests`
+and becomes one entry per shard (`tests (1)`, `tests (2)`, …).
+
+`DB_OPTIONS` cannot be shared: `mysqladmin` is absent from the MariaDB image and
+Postgres has neither, so the health-check is per engine. Set all four together —
+a `DB_IMAGE` on its own leaves the workflow connecting with the wrong driver and
+port.
 
 ## Flags
 
