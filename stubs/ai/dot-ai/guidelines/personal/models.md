@@ -64,40 +64,12 @@ final class User extends Authenticatable
 `nunomaduro/essentials` runs with `Unguard::class => true` (see
 `config/essentials.php`), so every model is already unguarded application-wide.
 Anything the model declares about mass assignment is dead code that only
-contradicts that setting.
+contradicts that setting: no `$fillable`, no `$guarded`, no `Model::unguard()`,
+and none of their attribute equivalents.
 
-Never use, in either form:
-
-| Legacy property | Laravel 13 attribute |
-|-----------------|----------------------|
-| `protected $fillable` | `#[Fillable(...)]` |
-| `protected $guarded` | `#[Guarded(...)]` |
-| `Model::unguard()` | `#[Unguarded]` |
-
-The only exception is **hiding columns from serialization**, and from Laravel 13
-that is a class attribute, not a property — `protected $hidden` is legacy, do
-not write it.
-
-```php
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-
-#[Hidden('password', 'remember_token')]
-final class User extends Authenticatable
-{
-    // ...
-}
-```
-
-- Use `#[Hidden]` only when a column genuinely must not be serialized
-  (`password`, `remember_token`, a token or secret column). A model with nothing
-  to hide carries no attribute at all.
-- Pass the columns as arguments; the attribute is variadic, so
-  `#[Hidden('password', 'remember_token')]`, not a nested array.
-- Same rule for every other model configuration Laravel 13 moved to attributes
-  (`#[Table]`, `#[Appends]`, `#[ObservedBy]`, `#[UsePolicy]`, `#[ScopedBy]`, …):
-  the attribute is the form to use, never the equivalent legacy property.
-- `casts()` and `protected $attributes` have no attribute equivalent — they stay
-  as they are (see *Cast Everything* and *Defaults Live in `$attributes`*).
+The only exception is hiding a column from serialization, and only when there is
+genuinely something to hide — `password`, `remember_token`, a token or secret
+column. A model with nothing to hide declares nothing.
 
 What keeps mass assignment safe here is not `$fillable`: it is that writes are
 fed from a validated DTO or the validated request payload, never from raw

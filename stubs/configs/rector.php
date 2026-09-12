@@ -2,22 +2,44 @@
 
 declare(strict_types=1);
 
+use Rector\CodingStyle\Rector\PostInc\PostIncDecToPreIncDecRector;
 use Rector\Config\RectorConfig;
+use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedPublicMethodParameterRector;
+use Rector\Php80\Rector\Switch_\ChangeSwitchToMatchRector;
+use Rector\Php81\Rector\Property\ReadOnlyPropertyRector;
+use Rector\Php83\Rector\ClassConst\AddTypeToConstRector;
+use Rector\TypeDeclaration\Rector\StmtsAwareInterface\DeclareStrictTypesRector;
+use RectorLaravel\Rector\FuncCall\ConfigToTypedConfigMethodCallRector;
 use RectorLaravel\Rector\FuncCall\RemoveDumpDataDeadCodeRector;
+use RectorLaravel\Rector\MethodCall\WhereToWhereLikeRector;
 use RectorLaravel\Rector\StaticCall\CarbonToDateFacadeRector;
 use RectorLaravel\Rector\StaticCall\DispatchToHelperFunctionsRector;
+use RectorLaravel\Rector\StaticCall\RouteActionCallableRector;
 use RectorLaravel\Set\LaravelSetList;
-use RectorLaravel\Set\LaravelSetProvider;
 
 return RectorConfig::configure()
     ->withPaths([
         __DIR__.'/app',
+        __DIR__.'/config',
         __DIR__.'/database',
+        __DIR__.'/routes',
     ])
-    ->withSetProviders(LaravelSetProvider::class)
     ->withComposerBased(laravel: true)
-    ->withConfiguredRule(RemoveDumpDataDeadCodeRector::class, [
-        'dd', 'dump', 'var_dump',
+    ->withPreparedSets(
+        deadCode: true,
+        codeQuality: true,
+        typeDeclarations: true,
+        privatization: true,
+    )
+    ->withRules([
+        AddTypeToConstRector::class,
+        ChangeSwitchToMatchRector::class,
+        ConfigToTypedConfigMethodCallRector::class,
+        ReadOnlyPropertyRector::class,
+        WhereToWhereLikeRector::class,
+        RemoveDumpDataDeadCodeRector::class,
+        RouteActionCallableRector::class,
+        DeclareStrictTypesRector::class,
     ])
     ->withSets([
         LaravelSetList::LARAVEL_ARRAYACCESS_TO_METHOD_CALL,
@@ -35,4 +57,8 @@ return RectorConfig::configure()
     ->withSkip([
         CarbonToDateFacadeRector::class,
         DispatchToHelperFunctionsRector::class,
+        PostIncDecToPreIncDecRector::class,
+        RemoveUnusedPublicMethodParameterRector::class => [
+            __DIR__.'/app/Policies',
+        ],
     ]);

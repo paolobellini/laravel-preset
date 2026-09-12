@@ -173,10 +173,11 @@ final class InstallCommand extends Command
         'analyse:static' => ['@pint:dry', '@stan', '@rector:dry'],
         'analyse' => ['@analyse:static', '@taint'],
         'tests' => ['@test:type-coverage', '@test:coverage'],
-        'ci:node' => ['npm run lint:check', 'npm run format:check', 'npm run types:check'],
+        'ai:cleanup' => ['@stan', '@rector:dry', '@test:coverage'],
 
         'pre-commit' => ['@analyse:static', '@test', '@ci:node'],
         'pre-push' => ['@rector:test:dry', '@test:mutate'],
+        'ci:node' => ['npm run lint:check', 'npm run format:check', 'npm run types:check'],
         'ci:php' => ['@analyse', '@tests'],
         'ci' => ['@ci:php', '@ci:node'],
     ];

@@ -82,6 +82,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `composer tests`; a failure is never worked around by weakening the tooling
   (no lowered `--min`, no baseline, no `@phpstan-ignore`, no excluded file); and
   `laravel/pao` is never disabled (`PAO_DISABLE`, provider or plugin removal).
+- **ai** — `pest-agent.md` (new) — `vendor/bin/pest --agent='<php>'` runs a
+  one-off assertion with no test file, for checking that a change behaves while
+  working on it. Covers the single-outer-quotes rule (double quotes expand
+  `$user` to nothing and silently check the wrong thing), fully qualified class
+  names (the generated file has no `use`), what the snippet inherits from
+  `tests/Pest.php` and what it does not (`beforeEach` hooks, groups, inline
+  traits), and the browser plugin needing explicit permission before install. It
+  never replaces the test files `testing.md` requires.
 - **ai** — `commits.md` — the commit title must cover every uncommitted change
   in the working tree, not just the last edit; unrelated work is proposed as a
   separate commit instead.

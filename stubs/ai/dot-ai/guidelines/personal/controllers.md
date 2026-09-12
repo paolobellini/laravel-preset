@@ -106,19 +106,8 @@ public function index(IndexUserRequest $request): AnonymousResourceCollection
 
 ## Filters
 
-- **Local filters** live in the model as **local scopes** using the
-  `#[Scope]` attribute (no `scope` prefix on the method). Keep filter logic out
+- **Local filters** live in the model as **local scopes**. Keep filter logic out
   of the controller.
-
-```php
-use Illuminate\Database\Eloquent\Attributes\Scope;
-
-#[Scope]
-public function search(Builder $query, string $term): Builder
-{
-    return $query->where('name', 'like', "%{$term}%");
-}
-```
 
 - **Global filters** that always apply (e.g. scoping every query by `user_id`)
   are implemented as a **global scope**, not repeated per query.

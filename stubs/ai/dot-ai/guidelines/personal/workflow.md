@@ -18,11 +18,14 @@ so each step can be validated, committed, then move to the next.
 
 After building any new feature, fix, or refactor:
 
-1. Run `composer analyse:static` (Pint, PHPStan, Rector dry-run) and
-   `composer tests` (Pest type-coverage min 95%, Pest coverage min 90%).
-2. **If anything fails or is not working, report it** — do not produce a commit
+1. Run `composer rector` — **not** the dry-run. The Rector config carries
+   conventions written down nowhere else (strict types, type declarations, dead
+   code, attribute migrations), so code that has not been through it does not
+   follow them yet. Check what it changed still does what the feature needs.
+2. Run `composer ai:cleanup`.
+3. **If anything fails or is not working, report it** — do not produce a commit
    message.
-3. **If everything passes, return a commit message** following the commit
+4. **If everything passes, return a commit message** following the commit
    conventions — subject line only, no description.
 
 Never work around a failure by weakening the tooling. Do not lower a `--min`

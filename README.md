@@ -42,8 +42,8 @@ Copies the `.ai/` directory only:
 
 - `.ai/guidelines/personal/*` — precedence, comments, commits, controllers
   (action pattern), actions, caching, enums, exceptions, form-requests,
-  frontend, models, php (Safe functions), policies, query-builder, resources,
-  testing, traits, translations, typescript, workflow.
+  frontend, models, pest-agent, php (Safe functions), policies, query-builder,
+  resources, testing, traits, translations, typescript, workflow.
 - `.ai/mcp/mcp.json`.
 
 ### `scripts` — composer quality scripts + dev deps

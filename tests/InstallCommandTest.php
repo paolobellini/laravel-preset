@@ -132,6 +132,7 @@ it('copies only the .ai conventions, nothing else', function () {
         ->and($this->appBase.'/.ai/guidelines/personal/resources.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/traits.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/form-requests.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/pest-agent.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/php.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/query-builder.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->toBeFile()
