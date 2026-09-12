@@ -15,7 +15,7 @@ final class InstallCommand extends Command {
         {--configs : Install lint/format/static-analysis configs and their dependencies}
         {--ai : Install the .ai conventions and guidelines}
         {--scripts : Install composer quality scripts}
-        {--github : Install GitHub Actions workflows (analyse, tests, security)}
+        {--github : Install GitHub Actions workflows and the dependabot config}
         {--lefthook : Install the lefthook pre-commit config (opt-in)}
         {--sharded : Replace the tests workflow with the sharded matrix variant}
         {--force : Overwrite files that already exist}
@@ -262,7 +262,7 @@ final class InstallCommand extends Command {
                 'configs' => 'Lint / format / static-analysis configs + dependencies',
                 'ai' => 'The .ai conventions and guidelines',
                 'scripts' => 'Composer quality scripts',
-                'github' => 'GitHub Actions workflows (analyse, tests, security)',
+                'github' => 'GitHub Actions workflows + dependabot',
                 'lefthook' => 'Lefthook pre-commit hooks (requires the lefthook binary)',
             ],
             default: $default,

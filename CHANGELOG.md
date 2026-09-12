@@ -62,6 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **github** — `.github/dependabot.yml`: weekly Composer, npm and GitHub Actions
+  updates, with minor/patch bumps grouped per ecosystem and per
+  production/development split and majors left as individual PRs. Commit
+  prefixes match the repo convention (`chore(deps)`, `chore(deps-dev)`,
+  `chore(ci)`), and a `cooldown` delays each release by 3 days (patch), 7
+  (minor) or 14 (major) before it is proposed — the GitHub Actions ecosystem
+  takes a flat 7, being the one that does not support the SemVer-specific keys.
+  Validated against the SchemaStore `dependabot-2.0` schema.
 - **github** — `--sharded` installs a matrix variant of `tests.yml` that splits
   the suite across four jobs, each running
   `composer test -- --shard=<n>/${{ strategy.job-total }}`; the denominator comes

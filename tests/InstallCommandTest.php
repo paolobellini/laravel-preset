@@ -146,7 +146,8 @@ it('copies only the .ai conventions, nothing else', function () {
 it('copies the github workflows', function () {
     Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
 
-    expect($this->appBase.'/.github/workflows/analyse.yml')->toBeFile()
+    expect($this->appBase.'/.github/dependabot.yml')->toBeFile()
+        ->and($this->appBase.'/.github/workflows/analyse.yml')->toBeFile()
         ->and($this->appBase.'/.github/workflows/tests.yml')->toBeFile()
         ->and($this->appBase.'/.github/workflows/security.yml')->toBeFile()
         ->and($this->appBase.'/.github/workflows/ci.yml')->not->toBeFile();
@@ -159,6 +160,13 @@ it('copies the github workflows', function () {
         ->toContain('paolobellini/bellini.one/actions/laravel/setup-app@v1.0')
         ->toContain("image: \${{ vars.DB_IMAGE || 'mysql:8.0' }}")
         ->toContain('composer tests');
+    expect(file_get_contents($this->appBase.'/.github/dependabot.yml'))
+        ->toContain('package-ecosystem: composer')
+        ->toContain('package-ecosystem: npm')
+        ->toContain('package-ecosystem: github-actions')
+        ->toContain('prefix: chore(deps)')
+        ->toContain('semver-major-days: 14');
+
     expect(file_get_contents($this->appBase.'/.github/workflows/security.yml'))
         ->toContain('branches: [main, staging, dev]')
         ->toContain('aquasecurity/trivy-action@v0.36.0')

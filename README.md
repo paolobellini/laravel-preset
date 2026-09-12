@@ -139,7 +139,7 @@ Lefthook is not a composer package: install the binary once per machine
 (`brew install lefthook`, or `npm i -D lefthook`), then run `lefthook install`
 in the project to wire up `.git/hooks`.
 
-### `github` — CI workflows
+### `github` — CI workflows and dependency updates
 
 First removes the starter-kit `lint.yml` + `tests.yml` (superseded), then copies
 the workflows. Each job runs the composer scripts from the `scripts` group
@@ -160,6 +160,15 @@ drift apart. Only the environment setup is shared, via the composite actions in
   runs a Trivy filesystem scan failing on `HIGH,CRITICAL`. Trivy's default
   scanners (`vuln` + `secret`) both apply; vulnerabilities with no fix available
   are ignored.
+- `.github/dependabot.yml` — weekly Composer, npm and GitHub Actions updates.
+  Minor and patch bumps are grouped into one PR per ecosystem and per
+  production/development split, so the usual flood becomes a handful of PRs;
+  **major** bumps stay on their own, because those are the ones worth reading.
+  Commit prefixes follow the repo convention (`chore(deps)`, `chore(deps-dev)`,
+  `chore(ci)`). A `cooldown` holds each release back before it is proposed — 3
+  days for a patch, 7 for a minor, 14 for a major — so a version pulled hours
+  after publication never reaches a PR; security updates ignore the cooldown
+  entirely. An existing `dependabot.yml` is never overwritten without `--force`.
 
 `analyse.yml` and `tests.yml` use `actions/laravel/setup-app@v1.0` to install
 PHP, Node, the composer/npm dependencies and the build; `security.yml` needs no
