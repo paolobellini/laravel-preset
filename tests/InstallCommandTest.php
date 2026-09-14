@@ -153,11 +153,14 @@ it('copies the github workflows', function () {
         ->and($this->appBase.'/.github/workflows/ci.yml')->not->toBeFile();
 
     expect(file_get_contents($this->appBase.'/.github/workflows/analyse.yml'))
-        ->toContain('paolobellini/bellini.one/actions/laravel/setup-app@v1.0')
+        ->toContain('paolobellini/bellini.one/actions/laravel/setup-app@v1.1')
+        ->toContain('install-node: ${{ steps.changes.outputs.frontend }}')
         ->toContain('composer analyse')
-        ->toContain('composer ci:node');
+        ->toContain('composer ci:node')
+        ->toContain('dorny/paths-filter@v4.0.3')
+        ->toContain("steps.changes.outputs.frontend == 'true'");
     expect(file_get_contents($this->appBase.'/.github/workflows/tests.yml'))
-        ->toContain('paolobellini/bellini.one/actions/laravel/setup-app@v1.0')
+        ->toContain('paolobellini/bellini.one/actions/laravel/setup-app@v1.1')
         ->toContain("image: \${{ vars.DB_IMAGE || 'mysql:8.0' }}")
         ->toContain('composer tests');
     expect(file_get_contents($this->appBase.'/.github/dependabot.yml'))
@@ -224,6 +227,53 @@ it('does not install the update-shards workflow without --sharded', function () 
     Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
 
     expect($this->appBase.'/.github/workflows/update-shards.yml')->not->toBeFile();
+});
+
+it('swaps dependabot for renovate when asked for', function () {
+    Artisan::call('preset:install', ['--github' => true, '--renovate' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.github/dependabot.yml')->not->toBeFile()
+        ->and($this->appBase.'/.github/renovate.json')->toBeFile();
+
+    $renovate = json_decode(file_get_contents($this->appBase.'/.github/renovate.json'), true);
+
+    expect($renovate['extends'])->toBe(['config:recommended'])
+        ->and($renovate['minimumReleaseAge'])->toBe('7 days')
+        ->and($renovate['vulnerabilityAlerts']['minimumReleaseAge'])->toBeNull()
+        ->and($renovate['lockFileMaintenance']['enabled'])->toBeTrue()
+        ->and($renovate['schedule'])->toBe(['* 0-6 * * 1'])
+        ->and($renovate['lockFileMaintenance']['schedule'])->toBe(['* * 1-7 * 1'])
+        ->and($renovate)->not->toHaveKey('dependencyDashboard');
+
+    expect($this->appBase.'/.github/workflows/renovate.yml')->not->toBeFile();
+});
+
+it('installs the self-hosted renovate workflow with --renovate-selfhosted', function () {
+    Artisan::call('preset:install', ['--github' => true, '--renovate-selfhosted' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.github/renovate.json')->toBeFile()
+        ->and($this->appBase.'/.github/dependabot.yml')->not->toBeFile();
+
+    expect(file_get_contents($this->appBase.'/.github/workflows/renovate.yml'))
+        ->toContain('renovatebot/github-action@v46.3.1')
+        ->toContain('secrets.RENOVATE_TOKEN')
+        ->toContain('RENOVATE_REPOSITORIES: ${{ github.repository }}')
+        ->toContain("cron: '0 0-6 * * 1'");
+});
+
+it('keeps dependabot without --renovate', function () {
+    Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.github/dependabot.yml')->toBeFile()
+        ->and($this->appBase.'/.github/renovate.json')->not->toBeFile();
+});
+
+it('combines --sharded and --renovate', function () {
+    Artisan::call('preset:install', ['--github' => true, '--sharded' => true, '--renovate' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.github/renovate.json')->toBeFile()
+        ->and($this->appBase.'/.github/workflows/update-shards.yml')->toBeFile()
+        ->and($this->appBase.'/.github/dependabot.yml')->not->toBeFile();
 });
 
 it('removes superseded starter-kit workflows', function () {

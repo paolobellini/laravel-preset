@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **github** — `analyse.yml` gates `composer ci:node` behind
+  `dorny/paths-filter`: the step is skipped when a pull request touches no
+  front-end file, which is the normal shape of a Composer dependency bump. The
+  filter is expressed as `**` minus the PHP side, the Markdown docs and the
+  agent conventions (`.ai`, `.claude`, `.junie`, `.factory`) rather than as a
+  list of front-end paths, so the failure mode is running the checks
+  unnecessarily rather than skipping them by mistake. `analyse` itself still runs on every
+  PR — PHPStan checks the project's call sites against the new vendor
+  signatures, which is exactly what a bump can break.
+- **github** — the Renovate schedules were widened after the upstream advice to
+  allow at least three to four hours: `* 4-6 * * 1` became `* 0-6 * * 1`, and
+  `lockFileMaintenance` moved from three hours on the first calendar day of the
+  month to `* * 1-7 * 1` — the first Monday, a full day wide. A schedule is a
+  permission window, not a trigger, so too narrow a window silently skips the
+  run. Dropped the redundant `dependencyDashboard`, already enabled by
+  `config:recommended`.
 - **github** — `analyse.yml` and `tests.yml` no longer call the
   `paolobellini/bellini.one` reusable workflows; the jobs are inlined and invoke
   the preset's own composer scripts (`analyse` + `ci:node`, `tests`). The
@@ -62,6 +78,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **github** — `--renovate` installs `.github/renovate.json` and removes
+  `.github/dependabot.yml`, so a project runs one update bot, not two. The
+  config mirrors the Dependabot grouping and cooldown, and adds
+  `lockFileMaintenance` (monthly full lockfile refresh, transitive dependencies
+  included — Dependabot only touches those when they are vulnerable) and the
+  dependency dashboard. `vulnerabilityAlerts` resets `minimumReleaseAge` to
+  `null` so security fixes are never held back. Validated against
+  `renovate-schema.json`.
+- **github** — `--renovate-selfhosted` adds `.github/workflows/renovate.yml`,
+  running Renovate from `renovatebot/github-action` every three hours for
+  projects where the GitHub App cannot be installed. It implies `--renovate`.
+  The job reads a `RENOVATE_TOKEN` secret rather than `GITHUB_TOKEN`, because
+  pull requests opened with the default token do not trigger workflows and the
+  update PRs would never be tested. Its cron covers exactly the window the
+  config allows (`0 22,23 * * 0` and `0 0-6 * * 1`, the two DST projections of
+  Monday 00:00–06:00 in `Europe/Rome`) — nine runs a week instead of the
+  fifty-six a three-hourly cron would bill for while doing nothing.
 - **github** — `.github/dependabot.yml`: weekly Composer, npm and GitHub Actions
   updates, with minor/patch bumps grouped per ecosystem and per
   production/development split and majors left as individual PRs. Commit

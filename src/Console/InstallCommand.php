@@ -15,9 +15,11 @@ final class InstallCommand extends Command {
         {--configs : Install lint/format/static-analysis configs and their dependencies}
         {--ai : Install the .ai conventions and guidelines}
         {--scripts : Install composer quality scripts}
-        {--github : Install GitHub Actions workflows and the dependabot config}
+        {--github : Install GitHub Actions workflows and the dependency update config}
         {--lefthook : Install the lefthook pre-commit config (opt-in)}
         {--sharded : Replace the tests workflow with the sharded matrix variant}
+        {--renovate : Use renovate instead of dependabot for dependency updates}
+        {--renovate-selfhosted : Also install the scheduled workflow that runs renovate without the GitHub App}
         {--force : Overwrite files that already exist}
         {--no-install : Write the new dependencies into composer.json without installing them}';
 
@@ -70,6 +72,16 @@ final class InstallCommand extends Command {
         'sharded/tests.yml' => '.github/workflows/tests.yml',
         'sharded/update-shards.yml' => '.github/workflows/update-shards.yml',
     ];
+
+    private const RENOVATE_STUB = 'renovate/renovate.json';
+
+    private const RENOVATE_FILE = '.github/renovate.json';
+
+    private const DEPENDABOT_FILE = '.github/dependabot.yml';
+
+    private const RENOVATE_WORKFLOW_STUB = 'renovate/renovate-workflow.yml';
+
+    private const RENOVATE_WORKFLOW_FILE = '.github/workflows/renovate.yml';
 
     private const SAIL_BINARY = 'vendor/bin/sail';
 
@@ -262,7 +274,7 @@ final class InstallCommand extends Command {
                 'configs' => 'Lint / format / static-analysis configs + dependencies',
                 'ai' => 'The .ai conventions and guidelines',
                 'scripts' => 'Composer quality scripts',
-                'github' => 'GitHub Actions workflows + dependabot',
+                'github' => 'GitHub Actions workflows + dependency updates',
                 'lefthook' => 'Lefthook pre-commit hooks (requires the lefthook binary)',
             ],
             default: $default,
@@ -337,17 +349,32 @@ final class InstallCommand extends Command {
             }
         });
 
-        if (! $this->option('sharded')) {
+        if ($this->option('sharded')) {
+            $this->components->task('Sharding the tests workflow', function () use ($files): void {
+                foreach (self::SHARDED_FILES as $stub => $destination) {
+                    $target = $this->basePath($destination);
+
+                    $files->ensureDirectoryExists(dirname($target));
+                    $files->copy($this->stubPath($stub), $target);
+                }
+            });
+        }
+
+        if (! $this->option('renovate') && ! $this->option('renovate-selfhosted')) {
             return;
         }
 
-        $this->components->task('Sharding the tests workflow', function () use ($files): void {
-            foreach (self::SHARDED_FILES as $stub => $destination) {
-                $target = $this->basePath($destination);
+        $this->components->task('Swapping dependabot for renovate', function () use ($files): void {
+            $files->copy($this->stubPath(self::RENOVATE_STUB), $this->basePath(self::RENOVATE_FILE));
+            $files->delete($this->basePath(self::DEPENDABOT_FILE));
+        });
 
-                $files->ensureDirectoryExists(dirname($target));
-                $files->copy($this->stubPath($stub), $target);
-            }
+        if (! $this->option('renovate-selfhosted')) {
+            return;
+        }
+
+        $this->components->task('Installing the self-hosted renovate workflow', function () use ($files): void {
+            $files->copy($this->stubPath(self::RENOVATE_WORKFLOW_STUB), $this->basePath(self::RENOVATE_WORKFLOW_FILE));
         });
     }
 

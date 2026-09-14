@@ -150,7 +150,16 @@ drift apart. Only the environment setup is shared, via the composite actions in
 - `.github/workflows/analyse.yml` — on push to `main` / any PR, runs
   `composer analyse` (pint, phpstan, rector, psalm taint) and `composer ci:node`.
   The Node step carries `if: ${{ !cancelled() }}` so a PHP failure still reports
-  the front-end result in the same run; the job fails either way.
+  the front-end result in the same run; the job fails either way. It is also
+  gated on `dorny/paths-filter`, which skips it when no front-end file changed —
+  a Composer-only bump PR has nothing for eslint or `tsc` to say, and neither
+  does a documentation-only one. The filter is written as "everything except the
+  PHP side, the docs and the agent conventions" (`**` plus negations, with
+  `predicate-quantifier: some-with-excludes`), so an unrecognised new file runs
+  the checks rather than silently skipping them. Note that `!**/*.md` also takes
+  Markdown out of `npm run format:check`; Prettier still formats it at
+  pre-commit, where `stage_fixed` writes the result back before the file is ever
+  committed.
 - `.github/workflows/tests.yml` — on push to `main` / any PR, runs
   `composer tests` (type coverage + coverage) against a database service
   container. The engine comes from the `DB_CONNECTION`, `DB_IMAGE`, `DB_PORT`
@@ -170,7 +179,7 @@ drift apart. Only the environment setup is shared, via the composite actions in
   after publication never reaches a PR; security updates ignore the cooldown
   entirely. An existing `dependabot.yml` is never overwritten without `--force`.
 
-`analyse.yml` and `tests.yml` use `actions/laravel/setup-app@v1.0` to install
+`analyse.yml` and `tests.yml` use `actions/laravel/setup-app@v1.1` to install
 PHP, Node, the composer/npm dependencies and the build; `security.yml` needs no
 setup. Both read the toolchain versions from the repository variables
 `PHP_VERSION` and `NODE_VERSION`, falling back to `8.5` and `24` when they are
@@ -184,6 +193,73 @@ The database engine is four repository variables — unset means MySQL 8.0:
 | MySQL | `mysql` | `mysql:8.0` | `3306` | `--health-cmd="mysqladmin ping -h 127.0.0.1" --health-interval=10s --health-timeout=5s --health-retries=5` |
 | MariaDB | `mariadb` | `mariadb:11` | `3306` | `--health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=5` |
 | PostgreSQL | `pgsql` | `postgres:17` | `5432` | `--health-cmd="pg_isready -U root" --health-interval=10s --health-timeout=5s --health-retries=5` |
+
+### Renovate instead of Dependabot
+
+`--renovate` writes `.github/renovate.json` and deletes `.github/dependabot.yml`,
+so only one bot ever watches the repo. The config mirrors the Dependabot one —
+weekly Monday window, minor/patch grouped per manager and per production/
+development split, majors on their own, `minimumReleaseAge` of 3/7/14 days by
+update type — and adds two things Dependabot has no equivalent for:
+
+- `lockFileMaintenance` refreshes the whole lockfile once a month, picking up
+  **transitive** dependencies that no direct constraint mentions.
+- `dependencyDashboard` opens a single issue listing everything pending, so
+  updates can be reviewed without a PR being opened for each.
+
+`vulnerabilityAlerts` sets `minimumReleaseAge` back to `null` and schedules
+`at any time`: the soak period must not delay a security fix.
+
+Read `schedule` as a permission window, not a trigger: Renovate runs on its own
+cadence and skips the repository when it falls outside. `* 0-6 * * 1` is seven
+hours on Monday; `* * 1-7 * 1` restricts both day of month and weekday, which
+Renovate reads as an AND — the first Monday of the month, with a full day to
+land in.
+
+Unlike Dependabot, the file alone does nothing — Renovate is not built into
+GitHub. Either install the hosted Renovate GitHub App on the repository, or add
+`--renovate-selfhosted`.
+
+#### `--renovate-selfhosted`
+
+Installs `.github/workflows/renovate.yml`, which runs Renovate from the official
+action. Use it when the GitHub App cannot be installed — no
+admin rights on the organisation, or a policy against third-party apps with
+write access. It implies `--renovate`, so the config file is installed too.
+
+The workflow needs a `RENOVATE_TOKEN` secret. Do **not** point it at the default
+`GITHUB_TOKEN`: pull requests opened with it do not trigger workflows, so
+`analyse` and `tests` would never run on an update PR and you would be merging
+unverified bumps. Use a personal access token, or a GitHub App token, with
+contents and pull-request write access.
+
+The cron covers exactly the window the config allows, in both DST regimes —
+Monday 00:00–06:00 in `Europe/Rome` is Sunday 22:00–Monday 05:00 UTC in summer
+and Sunday 23:00–Monday 06:00 UTC in winter:
+
+```yaml
+  schedule:
+    - cron: '0 22,23 * * 0'
+    - cron: '0 0-6 * * 1'
+```
+
+Nine runs a week rather than the fifty-six an every-three-hours cron would cost.
+Outside the window Renovate still boots, clones and analyses before deciding to
+do nothing, so a wide cron burns Actions minutes to no effect.
+
+**These two schedules have to be moved together.** Widen the window in
+`renovate.json` without widening the cron and Renovate simply never runs, with
+nothing in the logs to say why. If that bothers you, drop `schedule` and
+`lockFileMaintenance.schedule` from the config and drive the timing from the
+cron alone — one scheduler, at the cost of losing the local-time window.
+
+Once several projects share this setup, move the body of the file into a
+dedicated repository and reduce each project to
+`{"extends": ["github>paolobellini/renovate-config"]}` — the policy then lives
+in one place and no longer has to be re-copied by `preset:install`. This is safe
+to centralise precisely because the file describes policy, not commands: unlike
+the reusable CI workflows, nothing in it can fall out of step with a project's
+composer scripts.
 
 ### Sharding a large suite
 
