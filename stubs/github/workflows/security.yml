@@ -19,7 +19,20 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+          trivy-config: .github/trivy.yaml
           ignore-unfixed: true
           format: table
           exit-code: '1'
+          severity: HIGH,CRITICAL
+
+      - name: report vulnerabilities with no released fix
+        if: ${{ !cancelled() }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          trivy-config: .github/trivy.yaml
+          format: table
+          exit-code: '0'
           severity: HIGH,CRITICAL

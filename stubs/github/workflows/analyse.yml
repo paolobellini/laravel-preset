@@ -43,6 +43,7 @@ jobs:
               - '!.factory/**'
               - '!docs/**'
               - '!LICENSE'
+              - '!.vex/**'
 
       - name: setup app
         uses: paolobellini/bellini.one/actions/laravel/setup-app@v1.1

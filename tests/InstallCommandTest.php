@@ -173,7 +173,19 @@ it('copies the github workflows', function () {
     expect(file_get_contents($this->appBase.'/.github/workflows/security.yml'))
         ->toContain('branches: [main, staging, dev]')
         ->toContain('aquasecurity/trivy-action@v0.36.0')
-        ->toContain('severity: HIGH,CRITICAL');
+        ->toContain('trivy-config: .github/trivy.yaml')
+        ->toContain("exit-code: '1'");
+
+    expect(file_get_contents($this->appBase.'/.github/trivy.yaml'))
+        ->toContain('vex:')
+        ->toContain('.vex/openvex.json');
+
+    $vex = json_decode(file_get_contents($this->appBase.'/.vex/openvex.json'), true);
+
+    expect($vex['@context'])->toBe('https://openvex.dev/ns/v0.2.0')
+        ->and($vex['statements'])->toBe([])
+        ->and($vex['@id'])->toStartWith('urn:vex:')
+        ->and($vex['timestamp'])->toMatch('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/');
 });
 
 it('replaces the tests workflow with the sharded variant when asked for', function () {
@@ -274,6 +286,25 @@ it('combines --sharded and --renovate', function () {
     expect($this->appBase.'/.github/renovate.json')->toBeFile()
         ->and($this->appBase.'/.github/workflows/update-shards.yml')->toBeFile()
         ->and($this->appBase.'/.github/dependabot.yml')->not->toBeFile();
+});
+
+it('derives the vex document identifier from the project name', function () {
+    file_put_contents($this->appBase.'/composer.json', json_encode(['name' => 'paolobellini/bookminer']));
+
+    Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
+
+    $vex = json_decode(file_get_contents($this->appBase.'/.vex/openvex.json'), true);
+
+    expect($vex['@id'])->toBe('urn:vex:paolobellini:bookminer');
+});
+
+it('leaves an existing vex document untouched', function () {
+    mkdir($this->appBase.'/.vex', 0777, true);
+    file_put_contents($this->appBase.'/.vex/openvex.json', '{"statements":["mine"]}');
+
+    Artisan::call('preset:install', ['--github' => true, '--no-interaction' => true]);
+
+    expect(json_decode(file_get_contents($this->appBase.'/.vex/openvex.json'), true)['statements'])->toBe(['mine']);
 });
 
 it('removes superseded starter-kit workflows', function () {

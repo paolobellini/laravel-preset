@@ -166,9 +166,13 @@ drift apart. Only the environment setup is shared, via the composite actions in
   and `DB_OPTIONS` repository variables, defaulting to MySQL 8.0 when they are
   unset (see below).
 - `.github/workflows/security.yml` — on PR targeting `main`, `staging` or `dev`,
-  runs a Trivy filesystem scan failing on `HIGH,CRITICAL`. Trivy's default
-  scanners (`vuln` + `secret`) both apply; vulnerabilities with no fix available
-  are ignored.
+  a Trivy filesystem scan (`vuln` + `secret`) failing on `HIGH,CRITICAL`, plus a
+  second report-only pass that lists the vulnerabilities with no released fix
+  instead of hiding them behind `ignore-unfixed`.
+- `.github/trivy.yaml` — points Trivy at the VEX document.
+- `.vex/openvex.json` — the triage record (see below). Created empty, with its
+  `@id` derived from the project (`urn:vex:vendor:project`, from `composer.json`)
+  so two projects never share one, and never overwritten without `--force`.
 - `.github/dependabot.yml` — weekly Composer, npm and GitHub Actions updates.
   Minor and patch bumps are grouped into one PR per ecosystem and per
   production/development split, so the usual flood becomes a handful of PRs;
@@ -179,20 +183,60 @@ drift apart. Only the environment setup is shared, via the composite actions in
   after publication never reaches a PR; security updates ignore the cooldown
   entirely. An existing `dependabot.yml` is never overwritten without `--force`.
 
-`analyse.yml` and `tests.yml` use `actions/laravel/setup-app@v1.1` to install
-PHP, Node, the composer/npm dependencies and the build; `security.yml` needs no
-setup. Both read the toolchain versions from the repository variables
-`PHP_VERSION` and `NODE_VERSION`, falling back to `8.5` and `24` when they are
-not set — so a version bump is a repo setting, not an edit in two files.
-Switching scan severity is still a per-project edit of the copied file.
+#### Triaging a vulnerability with OpenVEX
 
-The database engine is four repository variables — unset means MySQL 8.0:
+A scanner has no memory: without one, a vulnerability you assessed months ago
+blocks every pull request forever. The record of that assessment is a VEX
+document, and `.vex/openvex.json` is it.
 
-| engine | `DB_CONNECTION` | `DB_IMAGE` | `DB_PORT` | `DB_OPTIONS` |
-|---|---|---|---|---|
-| MySQL | `mysql` | `mysql:8.0` | `3306` | `--health-cmd="mysqladmin ping -h 127.0.0.1" --health-interval=10s --health-timeout=5s --health-retries=5` |
-| MariaDB | `mariadb` | `mariadb:11` | `3306` | `--health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=5` |
-| PostgreSQL | `pgsql` | `postgres:17` | `5432` | `--health-cmd="pg_isready -U root" --health-interval=10s --health-timeout=5s --health-retries=5` |
+Most findings never reach it — a CVE with a released fix is answered by bumping
+the dependency, and the finding disappears on its own. A statement is for the
+other case: no fix exists, or one exists and cannot be applied, and you have
+established that the project is not exposed.
+
+```json
+{
+  "vulnerability": { "name": "GHSA-94pj-82f3-465w" },
+  "products": [ { "@id": "pkg:composer/guzzlehttp/guzzle@7.9.2" } ],
+  "status": "not_affected",
+  "justification": "vulnerable_code_not_in_execute_path"
+}
+```
+
+The spec requires `version` to be incremented whenever the document's content
+changes, so bump it in the same pull request as the statement. Trivy does not
+check it; a VEX consumer that merges documents from several sources does.
+
+Trivy matches on the package URL, drops the finding when the status is
+`not_affected` or `fixed`, and leaves it in place for `affected` and
+`under_investigation` — so a half-finished assessment keeps the build red. Where
+several statements match, the last one wins: change your mind by appending, not
+by editing, and the reasoning stays in the history.
+
+Including the version pins the statement to it, and a bump brings the finding
+back for a fresh assessment. Dropping the version (`pkg:composer/vendor/name`)
+makes it apply to every version, forever — defensible when the justification is
+about your own code rather than the dependency, but it never expires, so prefer
+the pinned form.
+
+OpenVEX rather than the CycloneDX VEX that Dependency-Track exports, for two
+reasons found in the source rather than the documentation: Trivy supports
+CycloneDX VEX only when scanning an SBOM, not a filesystem; and
+Dependency-Track's exporter omits the component list for that variant, leaving
+every `affects[].ref` pointing at the application itself rather than at the
+vulnerable package. OpenVEX identifies products by package URL, so it needs no
+companion document.
+
+Keep each statement in its own pull request. The GitHub `pull_request` event
+builds a merge ref, so as soon as a statement lands on the base branch every
+open pull request against it sees it — one small merge unblocks the rest, and a
+security decision gets reviewed on its own rather than buried in a feature
+branch. A `CODEOWNERS` entry for `/.vex/` is worth adding: it is the one place
+in the repository where a line makes a security alert disappear.
+
+Dependency-Track, if you run it, keeps its own role: it holds the portfolio view
+across projects and sends the `NEW_VULNERABILITY` notification. It is not in the
+critical path of CI, and its triage is not what the gate reads.
 
 ### Renovate instead of Dependabot
 

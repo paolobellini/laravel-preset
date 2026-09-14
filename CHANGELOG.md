@@ -78,6 +78,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **github** — `.github/trivy.yaml` and an empty `.vex/openvex.json`. Trivy
+  reads the VEX document itself and drops findings marked `not_affected` or
+  `fixed`, so the scanner gates directly and the triage lives in git, reviewed
+  in a pull request. OpenVEX rather than the CycloneDX VEX Dependency-Track
+  exports: Trivy accepts CycloneDX VEX only when scanning an SBOM, and
+  Dependency-Track's exporter omits the component list for that variant, so
+  every `affects[].ref` points at the application instead of the vulnerable
+  package. `ignore-unfixed` gates the scan, and a second report-only pass lists
+  the vulnerabilities with no released fix rather than hiding them. `.vex/**`
+  joins the paths excluded from the front-end checks. The document's `@id` is
+  derived from the project's composer name (`urn:vex:vendor:project`) and
+  stamped with the install time, since the spec requires each document to carry
+  an IRI of its own.
 - **github** — `--renovate` installs `.github/renovate.json` and removes
   `.github/dependabot.yml`, so a project runs one update bot, not two. The
   config mirrors the Dependabot grouping and cooldown, and adds

@@ -73,6 +73,10 @@ final class InstallCommand extends Command {
         'sharded/update-shards.yml' => '.github/workflows/update-shards.yml',
     ];
 
+    private const VEX_STUB = 'vex/openvex.json';
+
+    private const VEX_FILE = '.vex/openvex.json';
+
     private const RENOVATE_STUB = 'renovate/renovate.json';
 
     private const RENOVATE_FILE = '.github/renovate.json';
@@ -349,6 +353,12 @@ final class InstallCommand extends Command {
             }
         });
 
+        $this->components->task('Creating the VEX document', function () use ($files): void {
+            if ($this->copyFile($files, self::VEX_STUB, self::VEX_FILE)) {
+                $this->identifyVex($files);
+            }
+        });
+
         if ($this->option('sharded')) {
             $this->components->task('Sharding the tests workflow', function () use ($files): void {
                 foreach (self::SHARDED_FILES as $stub => $destination) {
@@ -486,6 +496,33 @@ final class InstallCommand extends Command {
             $files->ensureDirectoryExists(dirname($fileTarget));
             $files->copy($file->getPathname(), $fileTarget);
         }
+    }
+
+    private function identifyVex(Filesystem $files): void {
+        $path = $this->basePath(self::VEX_FILE);
+
+        /** @var array<string, mixed> $document */
+        $document = json_decode($files->get($path), true);
+
+        $document['@id'] = 'urn:vex:'.str_replace('/', ':', $this->projectName($files));
+        $document['timestamp'] = gmdate('Y-m-d\\TH:i:s\\Z');
+
+        $files->put($path, json_encode($document, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
+    }
+
+    private function projectName(Filesystem $files): string {
+        $path = $this->basePath('composer.json');
+
+        if ($files->exists($path)) {
+            /** @var array<string, mixed> $composer */
+            $composer = json_decode($files->get($path), true);
+
+            if (is_string($composer['name'] ?? null) && $composer['name'] !== '') {
+                return $composer['name'];
+            }
+        }
+
+        return basename($this->basePath(''));
     }
 
     private function patchComposerJson(Filesystem $files): void {
