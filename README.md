@@ -139,6 +139,21 @@ Lefthook is not a composer package: install the binary once per machine
 (`brew install lefthook`, or `npm i -D lefthook`), then run `lefthook install`
 in the project to wire up `.git/hooks`.
 
+Installing the group also clears the ground for a single agent: the scaffolding
+`boost:install` wrote for the others (`.amp`, `.codex`, `.cursor`, `.factory`,
+`.gemini`, `.grok`, `.junie`, `.kiro`, `.pi`, `.zed`, and
+`.github/copilot-instructions.md`) is deleted, and `boost.json` is pinned to
+`agents: ["claude_code"]`.
+
+The pin is the part that makes it stick. Boost only falls back to detecting
+agents when `boost.json` names none, and its detection is generous — Junie
+counts itself present because `.idea` exists, or because PhpStorm is installed
+on the machine at all. Delete the directories without pinning and the next
+`boost:install` writes them back.
+
+`.idea` and `.vscode` are never touched: Boost writes into them, but they hold
+your editor's own settings.
+
 ### `github` — CI workflows and dependency updates
 
 First removes the starter-kit `lint.yml` + `tests.yml` (superseded), then copies

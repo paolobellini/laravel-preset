@@ -90,6 +90,31 @@ final class InstallCommand extends Command {
     private const SAIL_BINARY = 'vendor/bin/sail';
 
     /**
+     * Agent scaffolding written by boost:install for agents other than Claude Code.
+     * `.idea` and `.vscode` are deliberately absent: boost writes into them, but
+     * they belong to the editor, not to boost.
+     *
+     * @var array<int, string>
+     */
+    private const SUPERSEDED_AGENTS = [
+        '.amp',
+        '.codex',
+        '.cursor',
+        '.factory',
+        '.gemini',
+        '.grok',
+        '.junie',
+        '.kiro',
+        '.pi',
+        '.zed',
+        '.github/copilot-instructions.md',
+    ];
+
+    private const BOOST_CONFIG = 'boost.json';
+
+    private const BOOST_AGENT = 'claude_code';
+
+    /**
      * @var array<int, string>
      */
     private const SUPERSEDED_WORKFLOWS = [
@@ -333,6 +358,47 @@ final class InstallCommand extends Command {
                 $this->copyDirectory($files, $stub, $destination);
             }
         });
+
+        $this->components->task('Removing other agents', fn () => $this->removeOtherAgents($files));
+    }
+
+    /**
+     * Delete the scaffolding boost:install wrote for every agent but Claude Code, and
+     * pin the choice in boost.json. Without the pin, boost re-detects agents from what
+     * it finds on the machine — PhpStorm being installed is enough — and writes the
+     * directories again on the next run.
+     */
+    private function removeOtherAgents(Filesystem $files): void {
+        foreach (self::SUPERSEDED_AGENTS as $artefact) {
+            $target = $this->basePath($artefact);
+
+            if ($files->isDirectory($target)) {
+                $files->deleteDirectory($target);
+                $this->line("  <fg=yellow>removed</> {$artefact}");
+            } elseif ($files->exists($target)) {
+                $files->delete($target);
+                $this->line("  <fg=yellow>removed</> {$artefact}");
+            }
+        }
+
+        $this->pinBoostAgent($files);
+    }
+
+    private function pinBoostAgent(Filesystem $files): void {
+        $path = $this->basePath(self::BOOST_CONFIG);
+
+        /** @var array<string, mixed> $config */
+        $config = $files->exists($path) ? (json_decode($files->get($path), true) ?? []) : [];
+
+        if (($config['agents'] ?? null) === [self::BOOST_AGENT]) {
+            return;
+        }
+
+        $config['agents'] = [self::BOOST_AGENT];
+        ksort($config);
+
+        $files->put($path, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
+        $this->line('  <fg=green>pinned</> '.self::BOOST_CONFIG.' to claude_code');
     }
 
     private function installGithub(Filesystem $files): void {

@@ -78,6 +78,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ai** — installing the group now deletes the agent scaffolding
+  `boost:install` wrote for everything but Claude Code (`.amp`, `.codex`,
+  `.cursor`, `.factory`, `.gemini`, `.grok`, `.junie`, `.kiro`, `.pi`, `.zed`
+  and `.github/copilot-instructions.md`) and pins `boost.json` to
+  `agents: ["claude_code"]`. Deleting alone would not hold: Boost re-detects
+  agents whenever `boost.json` names none, and detection is satisfied by an
+  `.idea` directory or a PhpStorm install, so the directories would come back on
+  the next run. `.idea` and `.vscode` are left alone — Boost writes into them,
+  but they belong to the editor.
 - **github** — `.github/trivy.yaml` and an empty `.vex/openvex.json`. Trivy
   reads the VEX document itself and drops findings marked `not_affected` or
   `fixed`, so the scanner gates directly and the triage lives in git, reviewed

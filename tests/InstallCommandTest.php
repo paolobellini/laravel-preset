@@ -118,6 +118,58 @@ it('strips the sail prefix when sail is installed but not configured', function 
         ->toContain('run: composer pint -- {staged_files}');
 });
 
+it('removes the scaffolding of every agent but claude code', function () {
+    foreach (['.junie', '.cursor', '.factory', '.zed', '.gemini', '.claude'] as $dir) {
+        mkdir($this->appBase.'/'.$dir, 0777, true);
+        file_put_contents($this->appBase.'/'.$dir.'/config.json', '{}');
+    }
+
+    mkdir($this->appBase.'/.github', 0777, true);
+    file_put_contents($this->appBase.'/.github/copilot-instructions.md', 'instructions');
+
+    Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.junie')->not->toBeDirectory()
+        ->and($this->appBase.'/.cursor')->not->toBeDirectory()
+        ->and($this->appBase.'/.factory')->not->toBeDirectory()
+        ->and($this->appBase.'/.zed')->not->toBeDirectory()
+        ->and($this->appBase.'/.gemini')->not->toBeDirectory()
+        ->and($this->appBase.'/.github/copilot-instructions.md')->not->toBeFile()
+        ->and($this->appBase.'/.claude')->toBeDirectory();
+});
+
+it('leaves the editor directories alone', function () {
+    foreach (['.idea', '.vscode'] as $dir) {
+        mkdir($this->appBase.'/'.$dir, 0777, true);
+        file_put_contents($this->appBase.'/'.$dir.'/workspace.xml', 'mine');
+    }
+
+    Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.idea')->toBeDirectory()
+        ->and($this->appBase.'/.vscode')->toBeDirectory();
+});
+
+it('pins boost to claude code without dropping the rest of boost.json', function () {
+    file_put_contents($this->appBase.'/boost.json', json_encode([
+        'agents' => ['claude_code', 'junie', 'cursor'],
+        'guidelines' => ['laravel'],
+    ]));
+
+    Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
+
+    $boost = json_decode(file_get_contents($this->appBase.'/boost.json'), true);
+
+    expect($boost['agents'])->toBe(['claude_code'])
+        ->and($boost['guidelines'])->toBe(['laravel']);
+});
+
+it('creates boost.json when the project has none', function () {
+    Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
+
+    expect(json_decode(file_get_contents($this->appBase.'/boost.json'), true)['agents'])->toBe(['claude_code']);
+});
+
 it('copies only the .ai conventions, nothing else', function () {
     Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
 
@@ -138,8 +190,6 @@ it('copies only the .ai conventions, nothing else', function () {
         ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->toBeFile()
         ->and($this->appBase.'/.ai/mcp/mcp.json')->toBeFile()
         ->and($this->appBase.'/.claude')->not->toBeDirectory()
-        ->and($this->appBase.'/.junie')->not->toBeDirectory()
-        ->and($this->appBase.'/.factory')->not->toBeDirectory()
         ->and($this->appBase.'/CLAUDE.md')->not->toBeFile();
 });
 
