@@ -5,9 +5,24 @@ All notable changes to `paolobellini/laravel-preset` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-09-15
 
 ### Changed
+
+- **ai** — expanded the `.ai/` personal guidelines:
+  - `controllers.md` — read methods (`index`, search, filters) must validate
+    with a Form Request and read input only via `->validated('field')`, using
+    `when()` to gate filter scopes; local filters as model `#[Scope]` scopes and
+    global filters as global scopes; real, meaningful validation rules
+    (`min`/`max` matching columns, specific rules — no bare `string`); actions
+    pass 1–2 fields directly, otherwise a DTO (`app/DTOs/`, `final readonly`,
+    `fromRequest()` constructor) instead of a loose array.
+  - `models.md` (new) — never mutate model attributes directly (mass assignment
+    only); all `@property` docblock lines are `@property-read`.
+  - `workflow.md` — build features layer by layer (data → service → frontend),
+    splitting service and frontend one controller method at a time.
+  - `testing.md` — model unit tests must assert the model keys via
+    `array_keys($model->toArray())`.
 
 - **ai** — `workflow.md` gained two sections ahead of the existing layer split.
   *Never Act Unasked* holds the agent to the request: no unrelated file touched,
@@ -342,25 +357,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **scripts** — `barryvdh/laravel-ide-helper` and the `ide-helper` composer
   script.
 
-## [1.0.1] - 2026-06-29
-
-### Changed
-
-- **ai** — expanded the `.ai/` personal guidelines:
-  - `controllers.md` — read methods (`index`, search, filters) must validate
-    with a Form Request and read input only via `->validated('field')`, using
-    `when()` to gate filter scopes; local filters as model `#[Scope]` scopes and
-    global filters as global scopes; real, meaningful validation rules
-    (`min`/`max` matching columns, specific rules — no bare `string`); actions
-    pass 1–2 fields directly, otherwise a DTO (`app/DTOs/`, `final readonly`,
-    `fromRequest()` constructor) instead of a loose array.
-  - `models.md` (new) — never mutate model attributes directly (mass assignment
-    only); all `@property` docblock lines are `@property-read`.
-  - `workflow.md` — build features layer by layer (data → service → frontend),
-    splitting service and frontend one controller method at a time.
-  - `testing.md` — model unit tests must assert the model keys via
-    `array_keys($model->toArray())`.
-
 ## [1.0.0] - 2026-06-28
 
 ### Added
@@ -389,5 +385,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `docker-compose.yml`), otherwise plain `composer update`. Skippable with
   `--no-install`.
 
-[1.0.1]: https://github.com/paolobellini/laravel-preset/releases/tag/v1.0.1
+[1.1.0]: https://github.com/paolobellini/laravel-preset/releases/tag/v1.1.0
 [1.0.0]: https://github.com/paolobellini/laravel-preset/releases/tag/v1.0.0
