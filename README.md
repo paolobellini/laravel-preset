@@ -395,11 +395,31 @@ Skills land in `.agents/skills/` as real files, with symlinks from
 file records a hash per skill, so `npx skills update` can tell you when a source
 has changed upstream.
 
+### `codegraph` — the project's code graph
+
+Opt-in. Runs `codegraph init`, which creates `.codegraph/` and builds the graph
+in one step, giving the agent a call graph to query instead of grepping for
+call sites.
+
+The binary is installed **once per machine**, not per project. When it is
+missing, the group asks whether to run `npx @colbymchenry/codegraph` — declining
+leaves the project untouched, and non-interactive runs only print the command,
+never run it. That installer does more than fetch a binary: it writes MCP config
+and a marker-fenced section into the instructions file of every agent it
+detects, which is why it is offered rather than assumed.
+
+An existing `.codegraph/` is left alone unless `--force` is passed, since
+rebuilding an index is not free.
+
+Nothing needs adding to `.gitignore`: CodeGraph writes one inside `.codegraph/`
+that ignores everything but itself, because the index is local to each machine.
+
 ## Flags
 
 ```bash
 php artisan preset:install --configs --ai --scripts --github   # pick groups
 php artisan preset:install --skills                            # agent skills only
+php artisan preset:install --codegraph                         # build the code graph
 php artisan preset:install --force                             # overwrite existing files / deps
 php artisan preset:install --no-install                        # skip the auto composer update
 ```

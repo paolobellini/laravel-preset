@@ -88,6 +88,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **codegraph** — a seventh, **opt-in** group (`--codegraph`) running
+  `codegraph init` to build the project's code graph. When the binary is absent
+  the group offers to run `npx @colbymchenry/codegraph` and does nothing if you
+  decline; a non-interactive run only prints the command. The installer is
+  offered rather than assumed because it also writes MCP config into every agent
+  it detects, which is per-machine state the preset has no business changing
+  silently. An existing `.codegraph/` is left alone without `--force`.
+
 - **skills** — a sixth, **opt-in** group (`--skills`, offered but never
   pre-selected) running the `skills` CLI into `.agents/skills`, with symlinks
   for Claude Code. From `jpcaparas/superpowers-laravel`:

@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Process;
 
+use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
 
 final class InstallCommand extends Command {
@@ -18,6 +19,7 @@ final class InstallCommand extends Command {
         {--github : Install GitHub Actions workflows and the dependency update config}
         {--lefthook : Install the lefthook pre-commit config (opt-in)}
         {--skills : Install the agent skills into .agents/skills (opt-in)}
+        {--codegraph : Build the CodeGraph index for this project (opt-in)}
         {--sharded : Replace the tests workflow with the sharded matrix variant}
         {--renovate : Use renovate instead of dependabot for dependency updates}
         {--renovate-selfhosted : Also install the scheduled workflow that runs renovate without the GitHub App}
@@ -138,6 +140,12 @@ final class InstallCommand extends Command {
      * @var array<int, string>
      */
     private const SKILL_AGENTS = ['universal', 'claude-code'];
+
+    private const CODEGRAPH_BINARY = 'codegraph';
+
+    private const CODEGRAPH_DIR = '.codegraph';
+
+    private const CODEGRAPH_INSTALLER = 'npx --yes @colbymchenry/codegraph';
 
     private const BOOST_CONFIG = 'boost.json';
 
@@ -261,6 +269,10 @@ final class InstallCommand extends Command {
             $this->installSkills();
         }
 
+        if (in_array('codegraph', $groups, true)) {
+            $this->installCodegraph($files);
+        }
+
         $this->newLine();
         $this->components->info('Preset installed.');
         $this->components->bulletList(array_values(array_filter([
@@ -318,7 +330,7 @@ final class InstallCommand extends Command {
      * @return array<int, string>
      */
     private function resolveGroups(): array {
-        $available = ['configs', 'ai', 'scripts', 'github', 'lefthook', 'skills'];
+        $available = ['configs', 'ai', 'scripts', 'github', 'lefthook', 'skills', 'codegraph'];
 
         $default = ['configs', 'ai', 'scripts', 'github'];
 
@@ -345,6 +357,7 @@ final class InstallCommand extends Command {
                 'github' => 'GitHub Actions workflows + dependency updates',
                 'lefthook' => 'Lefthook pre-commit hooks (requires the lefthook binary)',
                 'skills' => 'Agent skills for queues, transactions, scheduling, … (requires npx)',
+                'codegraph' => 'CodeGraph index for this project (requires the codegraph binary)',
             ],
             default: $default,
             required: true,
@@ -441,6 +454,59 @@ final class InstallCommand extends Command {
         $this->line('  <fg=green>pinned</> '.self::BOOST_CONFIG.' to claude_code');
     }
 
+    /**
+     * `codegraph init` creates .codegraph/ and builds the graph in one step. The
+     * binary is installed once per machine, not per project, so a missing one is
+     * reported rather than installed here.
+     */
+    private function installCodegraph(Filesystem $files): void {
+        if (! $this->hasCodegraph() && ! $this->setUpCodegraph()) {
+            return;
+        }
+
+        if ($files->isDirectory($this->basePath(self::CODEGRAPH_DIR)) && ! $this->option('force')) {
+            $this->components->task('Building the CodeGraph index', function (): bool {
+                $this->line('  <fg=yellow>skipped</> '.self::CODEGRAPH_DIR.' (exists, use --force)');
+
+                return true;
+            });
+
+            return;
+        }
+
+        $this->runProcess(self::CODEGRAPH_BINARY.' init');
+    }
+
+    /**
+     * The installer is a per-machine step that also writes MCP config into every
+     * agent it detects, so it is offered rather than run: declining leaves the
+     * project untouched.
+     */
+    private function setUpCodegraph(): bool {
+        if (! $this->input->isInteractive()) {
+            $this->components->warn(
+                'CodeGraph is not on your PATH. Install it with '
+                .'`'.self::CODEGRAPH_INSTALLER.'`, then run `codegraph init` here.'
+            );
+
+            return false;
+        }
+
+        if (! confirm(label: 'CodeGraph is not installed. Run its installer now?', default: false)) {
+            $this->components->warn('Skipped. Run `'.self::CODEGRAPH_INSTALLER.'` when you want it.');
+
+            return false;
+        }
+
+        return $this->runProcess(self::CODEGRAPH_INSTALLER) && $this->hasCodegraph();
+    }
+
+    private function hasCodegraph(): bool {
+        return Process::path($this->laravel->basePath())
+            ->run('command -v '.self::CODEGRAPH_BINARY)
+            ->successful();
+    }
+
     private function installSkills(): void {
         foreach (self::SKILLS as $source => $skills) {
             $arguments = ['add', $source];
@@ -463,8 +529,10 @@ final class InstallCommand extends Command {
      * @param  array<int, string>  $arguments
      */
     private function runSkills(array $arguments): bool {
-        $command = 'npx --yes skills@latest '.implode(' ', $arguments);
+        return $this->runProcess('npx --yes skills@latest '.implode(' ', $arguments));
+    }
 
+    private function runProcess(string $command): bool {
         $this->newLine();
         $this->components->info("Running {$command}…");
 

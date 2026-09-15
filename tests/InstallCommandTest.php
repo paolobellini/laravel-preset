@@ -420,6 +420,38 @@ it('names each skill with a separate flag, never with an equals sign', function 
     Process::assertRan(fn ($process): bool => ! str_contains((string) $process->command, '--skill='));
 });
 
+it('builds the codegraph index when the binary is available', function () {
+    Process::fake();
+
+    Artisan::call('preset:install', ['--codegraph' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph init');
+});
+
+it('reports a missing codegraph binary instead of installing it unasked', function () {
+    Process::fake(['command -v codegraph' => Process::result(exitCode: 1)]);
+
+    Artisan::call('preset:install', ['--codegraph' => true, '--no-interaction' => true]);
+
+    expect(Artisan::output())->toContain('@colbymchenry/codegraph');
+
+    Process::assertDidntRun(fn ($process): bool => (string) $process->command === 'codegraph init');
+    Process::assertDidntRun(fn ($process): bool => str_contains((string) $process->command, '@colbymchenry/codegraph'));
+});
+
+it('keeps an existing codegraph index unless forced', function () {
+    Process::fake();
+    mkdir($this->appBase.'/.codegraph', 0777, true);
+
+    Artisan::call('preset:install', ['--codegraph' => true, '--no-interaction' => true]);
+
+    Process::assertDidntRun(fn ($process): bool => (string) $process->command === 'codegraph init');
+
+    Artisan::call('preset:install', ['--codegraph' => true, '--force' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph init');
+});
+
 it('merges composer scripts and allows the pest plugin without npm scripts', function () {
     seed($this->appBase);
     Process::fake();
