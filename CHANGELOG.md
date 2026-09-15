@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **ai** — `workflow.md` gained two sections ahead of the existing layer split.
+  *Never Act Unasked* holds the agent to the request: no unrelated file touched,
+  no dependency or tool added on its own initiative, no improvement made in
+  passing because it happened to be noticed, and a question asked up front when
+  two readings of the request lead to different work. *Sizing the Work* has the
+  agent judge the change after the prompt and say so before starting — carried
+  through in one pass when it can be validated in one pass, otherwise split into
+  listed tasks that wait for confirmation, with a re-split if a task turns out
+  bigger than it looked.
+
 - **github** — `analyse.yml` gates `composer ci:node` behind
   `dorny/paths-filter`: the step is skipped when a pull request touches no
   front-end file, which is the normal shape of a Composer dependency bump. The
@@ -77,6 +87,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `protected $hidden`.
 
 ### Added
+
+- **skills** — a sixth, **opt-in** group (`--skills`, offered but never
+  pre-selected) running the `skills` CLI into `.agents/skills`, with symlinks
+  for Claude Code. From `jpcaparas/superpowers-laravel`:
+  `laravel:queues-and-horizon`, `laravel:http-client-resilience` and
+  `laravel:performance-select-columns`, covering ground the personal guidelines
+  leave open; skills that would compete with an existing convention are
+  deliberately excluded. From `mattpocock/skills`: `wait-what` and `teach`,
+  user-invoked only. The command spells each skill as its own `--skill` flag
+  (`--skill=name` is silently ignored and installs all of them) and names the
+  target agents, so the CLI cannot recreate the agent directories the `ai` group
+  removes.
 
 - **ai** — installing the group now deletes the agent scaffolding
   `boost:install` wrote for everything but Claude Code (`.amp`, `.codex`,

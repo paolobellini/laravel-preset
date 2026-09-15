@@ -17,6 +17,7 @@ final class InstallCommand extends Command {
         {--scripts : Install composer quality scripts}
         {--github : Install GitHub Actions workflows and the dependency update config}
         {--lefthook : Install the lefthook pre-commit config (opt-in)}
+        {--skills : Install the agent skills into .agents/skills (opt-in)}
         {--sharded : Replace the tests workflow with the sharded matrix variant}
         {--renovate : Use renovate instead of dependabot for dependency updates}
         {--renovate-selfhosted : Also install the scheduled workflow that runs renovate without the GitHub App}
@@ -109,6 +110,34 @@ final class InstallCommand extends Command {
         '.zed',
         '.github/copilot-instructions.md',
     ];
+
+    /**
+     * Source repository => skill names, as declared in each SKILL.md. They fill the
+     * gaps the personal guidelines leave rather than restating them, so nothing here
+     * competes with a convention the agent already carries.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const SKILLS = [
+        'jpcaparas/superpowers-laravel' => [
+            'laravel:queues-and-horizon',
+            'laravel:http-client-resilience',
+            'laravel:performance-select-columns',
+        ],
+        'mattpocock/skills' => [
+            'wait-what',
+            'teach',
+        ],
+    ];
+
+    /**
+     * Skills land in .agents/skills as real files; claude-code gets symlinks to them.
+     * Naming the agents keeps the installer from writing into the directories of the
+     * agents self::SUPERSEDED_AGENTS removes.
+     *
+     * @var array<int, string>
+     */
+    private const SKILL_AGENTS = ['universal', 'claude-code'];
 
     private const BOOST_CONFIG = 'boost.json';
 
@@ -228,6 +257,10 @@ final class InstallCommand extends Command {
             $this->installLefthook($files);
         }
 
+        if (in_array('skills', $groups, true)) {
+            $this->installSkills();
+        }
+
         $this->newLine();
         $this->components->info('Preset installed.');
         $this->components->bulletList(array_values(array_filter([
@@ -235,6 +268,12 @@ final class InstallCommand extends Command {
             'Run <fg=cyan>composer cleanup</> to verify everything passes.',
             in_array('lefthook', $groups, true)
                 ? 'Run <fg=cyan>lefthook install</> to wire up the git hooks.'
+                : null,
+            in_array('skills', $groups, true)
+                ? 'Commit <fg=cyan>.agents/skills</> and <fg=cyan>skills-lock.json</>; <fg=cyan>npx skills update</> refreshes them.'
+                : null,
+            in_array('ai', $groups, true)
+                ? 'Run <fg=cyan>php artisan boost:install</> — <fg=cyan>boost.json</> already pins it to Claude Code.'
                 : null,
         ])));
 
@@ -279,7 +318,7 @@ final class InstallCommand extends Command {
      * @return array<int, string>
      */
     private function resolveGroups(): array {
-        $available = ['configs', 'ai', 'scripts', 'github', 'lefthook'];
+        $available = ['configs', 'ai', 'scripts', 'github', 'lefthook', 'skills'];
 
         $default = ['configs', 'ai', 'scripts', 'github'];
 
@@ -305,6 +344,7 @@ final class InstallCommand extends Command {
                 'scripts' => 'Composer quality scripts',
                 'github' => 'GitHub Actions workflows + dependency updates',
                 'lefthook' => 'Lefthook pre-commit hooks (requires the lefthook binary)',
+                'skills' => 'Agent skills for queues, transactions, scheduling, … (requires npx)',
             ],
             default: $default,
             required: true,
@@ -399,6 +439,48 @@ final class InstallCommand extends Command {
 
         $files->put($path, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
         $this->line('  <fg=green>pinned</> '.self::BOOST_CONFIG.' to claude_code');
+    }
+
+    private function installSkills(): void {
+        foreach (self::SKILLS as $source => $skills) {
+            $arguments = ['add', $source];
+
+            foreach ($skills as $skill) {
+                $arguments[] = '--skill';
+                $arguments[] = $skill;
+            }
+
+            foreach (self::SKILL_AGENTS as $agent) {
+                $arguments[] = '--agent';
+                $arguments[] = $agent;
+            }
+
+            $this->runSkills($arguments);
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $arguments
+     */
+    private function runSkills(array $arguments): bool {
+        $command = 'npx --yes skills@latest '.implode(' ', $arguments);
+
+        $this->newLine();
+        $this->components->info("Running {$command}…");
+
+        $result = Process::path($this->laravel->basePath())
+            ->forever()
+            ->run($command, function (string $type, string $output): void {
+                $this->output->write($output);
+            });
+
+        if (! $result->successful()) {
+            $this->components->error("{$command} failed — run it manually.");
+
+            return false;
+        }
+
+        return true;
     }
 
     private function installGithub(Filesystem $files): void {

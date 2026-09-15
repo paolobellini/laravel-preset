@@ -370,6 +370,56 @@ it('removes superseded starter-kit workflows', function () {
         ->toContain('composer tests');
 });
 
+it('installs the agent skills only when asked for', function () {
+    Process::fake();
+
+    Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
+
+    Process::assertNothingRan();
+});
+
+it('adds the laravel skills to the universal and claude-code agents', function () {
+    Process::fake();
+
+    Artisan::call('preset:install', ['--skills' => true, '--no-interaction' => true]);
+
+    Process::assertRan(function ($process): bool {
+        $command = (string) $process->command;
+
+        return str_starts_with($command, 'npx --yes skills@latest add jpcaparas/superpowers-laravel')
+            && str_contains($command, '--skill laravel:queues-and-horizon')
+            && str_contains($command, '--skill laravel:http-client-resilience')
+            && str_contains($command, '--skill laravel:performance-select-columns')
+            && str_contains($command, '--agent universal')
+            && str_contains($command, '--agent claude-code');
+    });
+});
+
+it('adds the productivity skills from their own source', function () {
+    Process::fake();
+
+    Artisan::call('preset:install', ['--skills' => true, '--no-interaction' => true]);
+
+    Process::assertRan(function ($process): bool {
+        $command = (string) $process->command;
+
+        return str_starts_with($command, 'npx --yes skills@latest add mattpocock/skills')
+            && str_contains($command, '--skill wait-what')
+            && str_contains($command, '--skill teach')
+            && str_contains($command, '--agent universal')
+            && str_contains($command, '--agent claude-code');
+    });
+});
+
+it('names each skill with a separate flag, never with an equals sign', function () {
+    Process::fake();
+
+    Artisan::call('preset:install', ['--skills' => true, '--no-interaction' => true]);
+
+    // `--skill=name` is silently ignored by the CLI, which then installs every skill
+    Process::assertRan(fn ($process): bool => ! str_contains((string) $process->command, '--skill='));
+});
+
 it('merges composer scripts and allows the pest plugin without npm scripts', function () {
     seed($this->appBase);
     Process::fake();

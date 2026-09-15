@@ -363,10 +363,43 @@ Postgres has neither, so the health-check is per engine. Set all four together �
 a `DB_IMAGE` on its own leaves the workflow connecting with the wrong driver and
 port.
 
+### `skills` — agent skills
+
+Opt-in, like `lefthook`: offered in the prompt but never pre-selected, since it
+needs `npx` and the network. It runs the
+[`skills`](https://github.com/vercel-labs/skills) CLI over two sources:
+
+- [`jpcaparas/superpowers-laravel`](https://github.com/jpcaparas/superpowers-laravel)
+  — `laravel:queues-and-horizon`, `laravel:http-client-resilience`,
+  `laravel:performance-select-columns`.
+- [`mattpocock/skills`](https://github.com/mattpocock/skills) — `wait-what` and
+  `teach`, both user-invoked only (`disable-model-invocation`), so they never
+  fire unless you type them.
+
+They were picked to fill the gaps the `.ai` guidelines leave, not to restate
+them. Skills covering form requests, policies, caching, controllers, resources
+or testing are deliberately excluded: those are model-invoked, so they would
+fire exactly while the agent writes the code your own conventions govern, and
+offer a second opinion on top of them.
+
+Two details of the CLI are baked into the command because both fail quietly:
+
+- each skill is named with its own `--skill` flag. Written as `--skill=name` the
+  filter is ignored and **every** skill in the repository gets installed.
+- the agents are named explicitly (`universal`, `claude-code`). Left out, the
+  CLI writes into every agent directory it detects — including the ones the `ai`
+  group has just removed.
+
+Skills land in `.agents/skills/` as real files, with symlinks from
+`.claude/skills/`. Commit `.agents/skills/` and `skills-lock.json`; the lock
+file records a hash per skill, so `npx skills update` can tell you when a source
+has changed upstream.
+
 ## Flags
 
 ```bash
 php artisan preset:install --configs --ai --scripts --github   # pick groups
+php artisan preset:install --skills                            # agent skills only
 php artisan preset:install --force                             # overwrite existing files / deps
 php artisan preset:install --no-install                        # skip the auto composer update
 ```
