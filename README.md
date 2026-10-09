@@ -36,6 +36,19 @@ installs nothing until the plan is confirmed:
 Passing a group flag (see [Flags](#flags)) skips the steps and installs exactly
 the flagged groups.
 
+The confirmed choices are saved to `preset.json` at the project root — commit
+it. The next run finds it and asks *Reuse the choices saved in preset.json?*
+instead of walking through the steps again; a non-interactive run follows it
+without asking. Flagged runs neither read nor write it.
+
+```json
+{
+    "runtime": "sail",
+    "packages": ["data", "query-builder"],
+    "groups": ["packages", "configs", "scripts", "ai", "github"]
+}
+```
+
 ### `packages` — runtime packages
 
 `nunomaduro/essentials` and `thecodingmachine/safe` always go into `require`.
@@ -479,8 +492,9 @@ php artisan preset:install --force                             # overwrite exist
 php artisan preset:install --no-install                        # skip the auto composer update
 ```
 
-Without flags in a non-interactive shell, the default groups install:
-`packages`, `configs`, `scripts`, `ai` and `github`.
+Without flags in a non-interactive shell, `preset.json` is followed when it
+exists; otherwise the default groups install: `packages`, `configs`, `scripts`,
+`ai` and `github`.
 
 ### Runtime — where the project's commands run
 

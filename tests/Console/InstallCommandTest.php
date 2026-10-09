@@ -843,3 +843,106 @@ it('copies the guidelines of the packages picked in the same run', function () {
     expect($this->appBase.'/.ai/guidelines/personal/query-builder.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->toBeFile();
 });
+
+it('saves the confirmed choices to preset.json', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install')
+        ->expectsQuestion('Which optional packages does this project need?', ['data'])
+        ->expectsConfirmation('Install the development tooling?', 'no')
+        ->expectsQuestion('Which AI tooling should be installed?', [])
+        ->expectsQuestion('Which automation should be installed?', ['lefthook'])
+        ->expectsConfirmation('Install the preset as planned?', 'yes')
+        ->assertSuccessful();
+
+    expect(json_decode(file_get_contents($this->appBase.'/preset.json'), true))->toBe([
+        'runtime' => 'local',
+        'packages' => ['data'],
+        'groups' => ['packages', 'lefthook'],
+    ]);
+});
+
+it('reuses the saved choices instead of asking again', function () {
+    seed($this->appBase);
+    file_put_contents($this->appBase.'/preset.json', json_encode([
+        'runtime' => 'local', 'packages' => ['query-builder'], 'groups' => ['packages', 'lefthook'],
+    ]));
+    Process::fake();
+
+    $this->artisan('preset:install')
+        ->expectsConfirmation('Reuse the choices saved in preset.json?', 'yes')
+        ->expectsConfirmation('Install the preset as planned?', 'yes')
+        ->assertSuccessful();
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-query-builder thecodingmachine/safe');
+
+    expect($this->appBase.'/lefthook.yml')->toBeFile()
+        ->and($this->appBase.'/pint.json')->not->toBeFile();
+});
+
+it('asks everything again when the saved choices are turned down', function () {
+    seed($this->appBase);
+    file_put_contents($this->appBase.'/preset.json', json_encode([
+        'runtime' => 'local', 'packages' => [], 'groups' => ['packages', 'lefthook'],
+    ]));
+    Process::fake();
+
+    $this->artisan('preset:install')
+        ->expectsConfirmation('Reuse the choices saved in preset.json?', 'no')
+        ->expectsQuestion('Which optional packages does this project need?', [])
+        ->expectsConfirmation('Install the development tooling?', 'no')
+        ->expectsQuestion('Which AI tooling should be installed?', [])
+        ->expectsQuestion('Which automation should be installed?', ['github'])
+        ->expectsConfirmation('Install the preset as planned?', 'yes')
+        ->assertSuccessful();
+
+    expect(json_decode(file_get_contents($this->appBase.'/preset.json'), true)['groups'])->toBe(['packages', 'github'])
+        ->and($this->appBase.'/lefthook.yml')->not->toBeFile();
+});
+
+it('follows the saved choices without a terminal', function () {
+    seed($this->appBase);
+    file_put_contents($this->appBase.'/preset.json', json_encode([
+        'runtime' => 'local', 'packages' => [], 'groups' => ['lefthook'],
+    ]));
+    Process::fake();
+
+    Artisan::call('preset:install', ['--no-interaction' => true]);
+
+    Process::assertNothingRan();
+
+    expect($this->appBase.'/lefthook.yml')->toBeFile()
+        ->and($this->appBase.'/pint.json')->not->toBeFile();
+});
+
+it('leaves preset.json alone when groups are flagged', function () {
+    Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/preset.json')->not->toBeFile();
+});
+
+it('stops on a preset.json it cannot read', function () {
+    file_put_contents($this->appBase.'/preset.json', '{');
+
+    $this->artisan('preset:install')
+        ->expectsOutputToContain('preset.json could not be read')
+        ->assertFailed();
+
+    expect($this->appBase.'/pint.json')->not->toBeFile();
+});
+
+it('does not save the choices when the plan is turned down', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install')
+        ->expectsQuestion('Which optional packages does this project need?', [])
+        ->expectsConfirmation('Install the development tooling?', 'no')
+        ->expectsQuestion('Which AI tooling should be installed?', [])
+        ->expectsQuestion('Which automation should be installed?', [])
+        ->expectsConfirmation('Install the preset as planned?', 'no')
+        ->assertSuccessful();
+
+    expect($this->appBase.'/preset.json')->not->toBeFile();
+});

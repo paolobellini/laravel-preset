@@ -15,13 +15,17 @@ use PaoloBellini\LaravelPreset\Actions\InstallLefthook;
 use PaoloBellini\LaravelPreset\Actions\InstallPackages;
 use PaoloBellini\LaravelPreset\Actions\InstallScripts;
 use PaoloBellini\LaravelPreset\Actions\InstallSkills;
+use PaoloBellini\LaravelPreset\Actions\ReadPreset;
 use PaoloBellini\LaravelPreset\Actions\ResolveGroups;
 use PaoloBellini\LaravelPreset\Actions\ResolvePackages;
 use PaoloBellini\LaravelPreset\Actions\ResolveRuntime;
+use PaoloBellini\LaravelPreset\Actions\WritePreset;
+use PaoloBellini\LaravelPreset\Data\Preset;
 use PaoloBellini\LaravelPreset\Data\ResolvedRuntime;
 use PaoloBellini\LaravelPreset\Enums\Group;
 use PaoloBellini\LaravelPreset\Enums\Outcome;
 use PaoloBellini\LaravelPreset\Enums\Package;
+use PaoloBellini\LaravelPreset\Exceptions\InvalidPreset;
 use PaoloBellini\LaravelPreset\Exceptions\InvalidRuntime;
 
 use function Laravel\Prompts\confirm;
@@ -57,6 +61,8 @@ final class InstallCommand extends Command {
         private readonly ResolveGroups $resolveGroups,
         private readonly ResolvePackages $resolvePackages,
         private readonly DetectPackages $detectPackages,
+        private readonly ReadPreset $readPreset,
+        private readonly WritePreset $writePreset,
         private readonly BuildCommand $buildCommand,
         private readonly InstallPackages $installPackages,
         private readonly InstallConfigs $installConfigs,
@@ -71,15 +77,29 @@ final class InstallCommand extends Command {
     }
 
     public function handle(): int {
-        $option = $this->option('runtime');
+        $interactive = $this->input->isInteractive();
+
+        $flagged = array_values(array_filter(
+            Group::cases(),
+            fn (Group $group): bool => (bool) $this->option($group->value),
+        ));
+
+        $guided = $flagged === [];
+        $saved = null;
 
         try {
+            if ($guided) {
+                $saved = $this->savedPreset($interactive);
+            }
+
+            $option = $this->option('runtime');
+
             $this->resolved = $this->resolveRuntime->handle(
                 $this->laravel->basePath(),
-                is_string($option) ? $option : null,
-                $this->input->isInteractive(),
+                is_string($option) ? $option : $saved?->runtime->value,
+                $interactive,
             );
-        } catch (InvalidRuntime $exception) {
+        } catch (InvalidPreset|InvalidRuntime $exception) {
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;
@@ -87,23 +107,20 @@ final class InstallCommand extends Command {
 
         $this->components->twoColumnDetail('Runtime', $this->resolved->runtime->label());
 
-        $flagged = array_values(array_filter(
-            Group::cases(),
-            fn (Group $group): bool => (bool) $this->option($group->value),
-        ));
+        if ($saved !== null) {
+            $this->packages = $saved->packages;
+            $resolvedGroups = $saved->groups;
+        } else {
+            $installsPackages = $guided || in_array(Group::Packages, $flagged, true);
 
-        $interactive = $this->input->isInteractive();
-        $guided = $flagged === [] && $interactive;
+            $this->packages = $installsPackages
+                ? $this->resolvePackages->handle($interactive)
+                : $this->detectPackages->handle();
 
-        $installsPackages = $flagged === [] || in_array(Group::Packages, $flagged, true);
+            $resolvedGroups = $this->resolveGroups->handle($flagged, $interactive);
+        }
 
-        $this->packages = $installsPackages
-            ? $this->resolvePackages->handle($interactive)
-            : $this->detectPackages->handle();
-
-        $resolvedGroups = $this->resolveGroups->handle($flagged, $interactive);
-
-        if ($guided && ! $this->confirmPlan($resolvedGroups)) {
+        if ($guided && $interactive && ! $this->confirmPlan($resolvedGroups)) {
             $this->components->warn('Nothing installed.');
 
             return self::SUCCESS;
@@ -113,6 +130,12 @@ final class InstallCommand extends Command {
             if (in_array($group, $resolvedGroups, true)) {
                 $this->report($group->title(), $this->install($group));
             }
+        }
+
+        if ($guided) {
+            $preset = new Preset($this->resolved->runtime, $this->packages, $resolvedGroups);
+
+            $this->report('Saved choices', [WritePreset::FILE => $this->writePreset->handle($preset)]);
         }
 
         $this->newLine();
@@ -178,6 +201,16 @@ final class InstallCommand extends Command {
             Group::Skills => $this->installSkills->handle($write),
             Group::Codegraph => $this->installCodegraph->handle($this->resolved, $force, $interactive, $write),
         };
+    }
+
+    private function savedPreset(bool $interactive): ?Preset {
+        $saved = $this->readPreset->handle();
+
+        if ($saved === null || ! $interactive) {
+            return $saved;
+        }
+
+        return confirm('Reuse the choices saved in '.WritePreset::FILE.'?') ? $saved : null;
     }
 
     /**

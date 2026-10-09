@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **steps** — without flags the installer is now a guided procedure: runtime,
   optional packages, development tooling as one block, AI tooling, automation,
   then the plan and a confirmation. Nothing is written before the confirmation.
+- **preset.json** — the choices of a run without flags are saved at the
+  project root and offered again on the next run; a non-interactive run
+  follows them.
 - **packages** — new `packages` group and `--packages` flag for the runtime
   packages, which no longer ride along with `scripts`.
 
