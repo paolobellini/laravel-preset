@@ -566,6 +566,24 @@ it('uses sail composer only when sail is installed and configured', function () 
     Process::assertRan(fn ($process) => str_starts_with($process->command, './vendor/bin/sail composer require '));
 });
 
+it('uses plain composer when already running inside the sail container', function () {
+    seed($this->appBase);
+    mkdir($this->appBase.'/vendor/bin', 0777, true);
+    file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
+    file_put_contents($this->appBase.'/compose.yaml', "services: {}\n");
+    putenv('LARAVEL_SAIL=1');
+    Process::fake();
+
+    try {
+        Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+    } finally {
+        putenv('LARAVEL_SAIL');
+    }
+
+    Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
+    Process::assertNotRan(fn ($process) => str_contains($process->command, 'vendor/bin/sail'));
+});
+
 it('falls back to plain composer when sail is installed but not configured', function () {
     seed($this->appBase);
     mkdir($this->appBase.'/vendor/bin', 0777, true);

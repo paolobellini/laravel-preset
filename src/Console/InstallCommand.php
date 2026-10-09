@@ -92,6 +92,8 @@ final class InstallCommand extends Command {
 
     private const SAIL_BINARY = 'vendor/bin/sail';
 
+    private const SAIL_ENV = 'LARAVEL_SAIL';
+
     /**
      * Agent scaffolding written by boost:install for agents other than Claude Code.
      * `.idea` and `.vscode` are deliberately absent: boost writes into them, but
@@ -296,7 +298,9 @@ final class InstallCommand extends Command {
      * @param  array<int, string>  $arguments
      */
     private function runComposer(Filesystem $files, array $arguments): bool {
-        $binary = $this->usesSail($files) ? './'.self::SAIL_BINARY.' composer' : 'composer';
+        $binary = $this->usesSail($files) && ! $this->insideSail()
+            ? './'.self::SAIL_BINARY.' composer'
+            : 'composer';
         $command = $binary.' '.implode(' ', $arguments);
 
         $this->newLine();
@@ -324,6 +328,10 @@ final class InstallCommand extends Command {
 
         return $files->exists($this->basePath('compose.yaml'))
             || $files->exists($this->basePath('docker-compose.yml'));
+    }
+
+    private function insideSail(): bool {
+        return (bool) getenv(self::SAIL_ENV);
     }
 
     /**

@@ -13,7 +13,8 @@ php artisan preset:install
 
 When the `scripts` group is selected, `preset:install` adds the dev
 dependencies with `composer require` (prefixed with `./vendor/bin/sail` when
-Laravel Sail is installed). No version constraint is ever passed, so composer
+Laravel Sail is installed and the command runs on the host — inside the
+container, as with `sail artisan preset:install`, plain `composer` is used). No version constraint is ever passed, so composer
 resolves the newest stable release compatible with the project — the preset
 never carries a stale version around. Pass `--no-install` to write the resolved
 constraints into `composer.json` without installing.
