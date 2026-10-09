@@ -130,6 +130,10 @@ Passing paths to PHPStan and Rector narrows them to those files — an error
 caused elsewhere will not show up until CI. That is the trade that keeps the
 commit hook fast.
 
+Paths given on the command line also replace the `paths` of `phpstan.neon`, so
+the `stan` job's `glob` and `exclude` repeat them: a staged `rector.php` or
+migration is never handed to PHPStan. Change one, change the other.
+
 The commands are prefixed with `vendor/bin/sail` only when Sail is detected in
 the project; otherwise the prefix is stripped from the copied file.
 

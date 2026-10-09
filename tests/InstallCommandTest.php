@@ -95,6 +95,15 @@ it('keeps the sail prefix in lefthook.yml when sail is configured', function () 
         ->toContain('vendor/bin/sail composer test:mutate');
 });
 
+it('scopes the lefthook stan job to the paths phpstan.neon analyses', function () {
+    Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
+
+    expect(file_get_contents($this->appBase.'/lefthook.yml'))
+        ->toContain('"{app,config,database,routes,tests}/*.php"')
+        ->toContain('"bootstrap/app.php"')
+        ->toContain('"database/migrations/*"');
+});
+
 it('strips the sail prefix from lefthook.yml when sail is not installed', function () {
     Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
 
