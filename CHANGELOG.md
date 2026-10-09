@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   running*: the command, already inside the container, called
   `./vendor/bin/sail composer require`, and Sail found no Docker there. With
   `LARAVEL_SAIL` set it now calls `composer` directly.
+- **codegraph** — setting CodeGraph up never finished: the group ran the
+  `npx @colbymchenry/codegraph` wizard, whose questions could not be answered
+  through a piped process. The binary is now installed with `npm install
+  --global @colbymchenry/codegraph`, and every run wires the project with
+  `codegraph install --yes --target claude --location local` (`.mcp.json`,
+  `.claude/settings.json`, `.claude/CLAUDE.md` — nothing global) before
+  building the index with `codegraph init --yes`. Inside the Sail container the
+  group stops with a notice instead of looking for a binary that lives on the
+  host.
 - **lefthook** — the `stan` job matched every staged `*.php`, handing PHPStan
   files outside the `paths` of `phpstan.neon` (`rector.php`, migrations,
   `public/index.php`, …) and failing commits CI would pass. Its `glob` and

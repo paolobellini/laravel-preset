@@ -434,7 +434,8 @@ it('builds the codegraph index when the binary is available', function () {
 
     Artisan::call('preset:install', ['--codegraph' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph init');
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph install --yes --target claude --location local');
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph init --yes');
 });
 
 it('reports a missing codegraph binary instead of installing it unasked', function () {
@@ -444,8 +445,40 @@ it('reports a missing codegraph binary instead of installing it unasked', functi
 
     expect(Artisan::output())->toContain('@colbymchenry/codegraph');
 
-    Process::assertDidntRun(fn ($process): bool => (string) $process->command === 'codegraph init');
+    Process::assertDidntRun(fn ($process): bool => str_starts_with((string) $process->command, 'codegraph '));
     Process::assertDidntRun(fn ($process): bool => str_contains((string) $process->command, '@colbymchenry/codegraph'));
+});
+
+it('installs codegraph without prompts once confirmed', function () {
+    Process::fake([
+        'command -v codegraph' => Process::sequence()
+            ->push(Process::result(exitCode: 1))
+            ->push(Process::result()),
+        '*' => Process::result(),
+    ]);
+
+    $this->artisan('preset:install', ['--codegraph' => true])
+        ->expectsConfirmation('CodeGraph is not installed. Install it now?', 'yes')
+        ->assertSuccessful();
+
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'npm install --global @colbymchenry/codegraph');
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph install --yes --target claude --location local');
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph init --yes');
+});
+
+it('leaves codegraph to the host when running inside the sail container', function () {
+    Process::fake();
+    putenv('LARAVEL_SAIL=1');
+
+    try {
+        Artisan::call('preset:install', ['--codegraph' => true, '--no-interaction' => true]);
+    } finally {
+        putenv('LARAVEL_SAIL');
+    }
+
+    expect(Artisan::output())->toContain('outside Sail');
+
+    Process::assertNothingRan();
 });
 
 it('keeps an existing codegraph index unless forced', function () {
@@ -454,11 +487,11 @@ it('keeps an existing codegraph index unless forced', function () {
 
     Artisan::call('preset:install', ['--codegraph' => true, '--no-interaction' => true]);
 
-    Process::assertDidntRun(fn ($process): bool => (string) $process->command === 'codegraph init');
+    Process::assertDidntRun(fn ($process): bool => (string) $process->command === 'codegraph init --yes');
 
     Artisan::call('preset:install', ['--codegraph' => true, '--force' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph init');
+    Process::assertRan(fn ($process): bool => (string) $process->command === 'codegraph init --yes');
 });
 
 it('merges composer scripts and allows the pest plugin without npm scripts', function () {

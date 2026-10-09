@@ -403,19 +403,32 @@ has changed upstream.
 
 ### `codegraph` — the project's code graph
 
-Opt-in. Runs `codegraph init`, which creates `.codegraph/` and builds the graph
-in one step, giving the agent a call graph to query instead of grepping for
-call sites.
+Opt-in. Two commands, neither asking anything:
 
-The binary is installed **once per machine**, not per project. When it is
-missing, the group asks whether to run `npx @colbymchenry/codegraph` — declining
-leaves the project untouched, and non-interactive runs only print the command,
-never run it. That installer does more than fetch a binary: it writes MCP config
-and a marker-fenced section into the instructions file of every agent it
-detects, which is why it is offered rather than assumed.
+```bash
+codegraph install --yes --target claude --location local
+codegraph init --yes
+```
 
-An existing `.codegraph/` is left alone unless `--force` is passed, since
-rebuilding an index is not free.
+The first wires CodeGraph into **the project**, for Claude Code only: the MCP
+server in `.mcp.json`, the tool permission and prompt hook in
+`.claude/settings.json`, and a marker-fenced section in `.claude/CLAUDE.md`.
+Nothing is written to your global config, and committing those files gives the
+whole team the same setup. The second creates `.codegraph/` and builds the
+graph, giving the agent a call graph to query instead of grepping for call
+sites.
+
+Only the binary is installed **once per machine**. When it is missing, the
+group asks whether to run `npm install --global @colbymchenry/codegraph` —
+declining leaves the machine untouched, and non-interactive runs only print the
+command, never run it. The upstream `npx @colbymchenry/codegraph` wizard is not
+used: it asks questions the installer has no terminal to answer.
+
+CodeGraph belongs to the host. Under `sail artisan preset:install` the group
+only says so and stops: run it with plain `php artisan` instead.
+
+An existing `.codegraph/` is not rebuilt unless `--force` is passed, since
+rebuilding an index is not free; the wiring is still refreshed.
 
 Nothing needs adding to `.gitignore`: CodeGraph writes one inside `.codegraph/`
 that ignores everything but itself, because the index is local to each machine.
