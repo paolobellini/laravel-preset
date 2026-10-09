@@ -527,7 +527,7 @@ it('requires the preset dependencies unconstrained so composer resolves the late
     seed($this->appBase);
     Process::fake();
 
-    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+    Artisan::call('preset:install', ['--packages' => true, '--scripts' => true, '--no-interaction' => true]);
 
     Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data spatie/laravel-query-builder thecodingmachine/safe');
 
@@ -572,7 +572,7 @@ it('moves a runtime package out of require-dev', function () {
     file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
     Process::fake();
 
-    $this->artisan('preset:install', ['--scripts' => true])
+    $this->artisan('preset:install', ['--packages' => true])
         ->expectsQuestion('Which optional packages does this project need?', ['data', 'query-builder', 'typescript-transformer'])
         ->assertSuccessful();
 
@@ -583,7 +583,7 @@ it('requires only the mandatory packages when none is picked', function () {
     seed($this->appBase);
     Process::fake();
 
-    $this->artisan('preset:install', ['--scripts' => true])
+    $this->artisan('preset:install', ['--packages' => true])
         ->expectsQuestion('Which optional packages does this project need?', [])
         ->assertSuccessful();
 
@@ -597,7 +597,7 @@ it('adds the typescript transformer on an inertia project', function () {
     file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
     Process::fake();
 
-    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+    Artisan::call('preset:install', ['--packages' => true, '--no-interaction' => true]);
 
     Process::assertRan(fn ($process) => str_contains($process->command, 'spatie/laravel-typescript-transformer'));
 });
@@ -606,15 +606,20 @@ it('asks which optional packages to install', function () {
     seed($this->appBase);
     Process::fake();
 
-    $this->artisan('preset:install', ['--scripts' => true])
+    $this->artisan('preset:install', ['--packages' => true])
         ->expectsQuestion('Which optional packages does this project need?', ['data'])
         ->assertSuccessful();
 
     Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data thecodingmachine/safe');
 });
 
-it('does not ask for packages when the scripts group is left out', function () {
-    $this->artisan('preset:install', ['--configs' => true])->assertSuccessful();
+it('does not ask for packages when the packages group is left out', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install', ['--scripts' => true])->assertSuccessful();
+
+    Process::assertNotRan(fn ($process) => str_contains($process->command, 'nunomaduro/essentials'));
 });
 
 it('re-requires already present packages with --force', function () {
@@ -666,7 +671,6 @@ it('asks where the commands run when sail is configured on the host', function (
 
     $this->artisan('preset:install', ['--scripts' => true])
         ->expectsQuestion('Where do this project\'s commands run?', 'local')
-        ->expectsQuestion('Which optional packages does this project need?', [])
         ->assertSuccessful();
 
     Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
@@ -697,7 +701,6 @@ it('takes the runtime from the option without asking', function () {
     Process::fake();
 
     $this->artisan('preset:install', ['--scripts' => true, '--lefthook' => true, '--runtime' => 'local'])
-        ->expectsQuestion('Which optional packages does this project need?', [])
         ->assertSuccessful();
 
     Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
@@ -752,7 +755,7 @@ it('writes the constraints without installing with --no-install', function () {
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-install' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process) => str_contains($process->command, 'composer require --no-interaction --no-update '));
+    Process::assertRan(fn ($process) => str_contains($process->command, 'composer require --dev --no-interaction --no-update '));
 });
 
 it('skips existing files unless forced', function () {
@@ -763,4 +766,45 @@ it('skips existing files unless forced', function () {
 
     Artisan::call('preset:install', ['--configs' => true, '--force' => true, '--no-interaction' => true]);
     expect(json_decode(file_get_contents($this->appBase.'/pint.json'), true))->toHaveKey('preset', 'laravel');
+});
+
+it('walks through the steps and installs the confirmed plan', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install')
+        ->expectsQuestion('Which optional packages does this project need?', ['data'])
+        ->expectsConfirmation('Install the development tooling?', 'no')
+        ->expectsQuestion('Which AI tooling should be installed?', ['ai'])
+        ->expectsQuestion('Which automation should be installed?', ['lefthook'])
+        ->expectsOutputToContain('nunomaduro/essentials, thecodingmachine/safe, spatie/laravel-data')
+        ->expectsConfirmation('Install the preset as planned?', 'yes')
+        ->assertSuccessful();
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data thecodingmachine/safe');
+    Process::assertNotRan(fn ($process) => str_starts_with($process->command, 'composer require --dev'));
+
+    expect($this->appBase.'/.ai/guidelines/personal/actions.md')->toBeFile()
+        ->and($this->appBase.'/lefthook.yml')->toBeFile()
+        ->and($this->appBase.'/pint.json')->not->toBeFile()
+        ->and($this->appBase.'/.github')->not->toBeDirectory();
+});
+
+it('installs nothing when the plan is turned down', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install')
+        ->expectsQuestion('Which optional packages does this project need?', [])
+        ->expectsConfirmation('Install the development tooling?', 'yes')
+        ->expectsQuestion('Which AI tooling should be installed?', ['ai'])
+        ->expectsQuestion('Which automation should be installed?', [])
+        ->expectsConfirmation('Install the preset as planned?', 'no')
+        ->expectsOutputToContain('Nothing installed.')
+        ->assertSuccessful();
+
+    Process::assertNothingRan();
+
+    expect($this->appBase.'/pint.json')->not->toBeFile()
+        ->and($this->appBase.'/.ai')->not->toBeDirectory();
 });

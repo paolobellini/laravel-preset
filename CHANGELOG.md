@@ -18,7 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `spatie/laravel-typescript-transformer` are picked one by one, the last
   offered only on a project that requires `inertiajs/inertia-laravel`.
 
+- **steps** — without flags the installer is now a guided procedure: runtime,
+  optional packages, development tooling as one block, AI tooling, automation,
+  then the plan and a confirmation. Nothing is written before the confirmation.
+- **packages** — new `packages` group and `--packages` flag for the runtime
+  packages, which no longer ride along with `scripts`.
+
 ### Changed
+
+- **scripts** — `--scripts` now requires only the dev dependencies; the runtime
+  packages moved to `--packages`.
 
 - **scripts** — a non-interactive run on a project without Inertia no longer
   requires `spatie/laravel-typescript-transformer`.

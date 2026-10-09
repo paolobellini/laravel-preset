@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Process;
 use PaoloBellini\LaravelPreset\Actions\RequireDependencies;
 use PaoloBellini\LaravelPreset\Data\ResolvedRuntime;
 use PaoloBellini\LaravelPreset\Enums\Outcome;
-use PaoloBellini\LaravelPreset\Enums\Package;
 use PaoloBellini\LaravelPreset\Enums\Runtime;
 
 beforeEach(function () {
@@ -14,38 +13,79 @@ beforeEach(function () {
     $this->silent = fn (string $text) => null;
 });
 
-it('requires the runtime and the dev packages in two batches', function () {
-    file_put_contents($this->appBase.'/composer.json', json_encode(['require' => ['php' => '^8.3']]));
+it('requires the missing packages', function () {
+    file_put_contents($this->appBase.'/composer.json', json_encode(['require' => ['acme/one' => '*']]));
     Process::fake();
 
-    $outcomes = app(RequireDependencies::class)->handle($this->local, [], force: false, noInstall: false, write: $this->silent);
+    $outcomes = app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one', 'acme/two'], dev: false, force: false, noInstall: false, write: $this->silent,
+    );
 
-    expect($outcomes)->toBe(['composer require' => Outcome::Ran, 'composer require --dev' => Outcome::Ran]);
+    expect($outcomes)->toBe(['composer require' => Outcome::Ran]);
 
-    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials thecodingmachine/safe');
-    Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require --dev --no-interaction '));
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction acme/two');
 });
 
-it('skips a batch whose packages are all present', function () {
-    file_put_contents($this->appBase.'/composer.json', json_encode(['require' => [
-        'nunomaduro/essentials' => '*',
-        'thecodingmachine/safe' => '*',
-    ]]));
+it('requires dev packages with --dev', function () {
+    file_put_contents($this->appBase.'/composer.json', '{}');
     Process::fake();
 
-    $outcomes = app(RequireDependencies::class)->handle($this->local, [], force: false, noInstall: false, write: $this->silent);
+    $outcomes = app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one'], dev: true, force: false, noInstall: false, write: $this->silent,
+    );
 
-    expect($outcomes['composer require'])->toBe(Outcome::Skipped)
-        ->and($outcomes['composer require --dev'])->toBe(Outcome::Ran);
+    expect($outcomes)->toBe(['composer require --dev' => Outcome::Ran]);
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --dev --no-interaction acme/one');
+});
+
+it('counts a dev package as present wherever it is required', function () {
+    file_put_contents($this->appBase.'/composer.json', json_encode([
+        'require' => ['acme/one' => '*'],
+        'require-dev' => ['acme/two' => '*'],
+    ]));
+    Process::fake();
+
+    $outcomes = app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one', 'acme/two'], dev: true, force: false, noInstall: false, write: $this->silent,
+    );
+
+    expect($outcomes)->toBe(['composer require --dev' => Outcome::Skipped]);
+
+    Process::assertNothingRan();
+});
+
+it('requires a runtime package again when it sits in require-dev', function () {
+    file_put_contents($this->appBase.'/composer.json', json_encode(['require-dev' => ['acme/one' => '*']]));
+    Process::fake();
+
+    app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one'], dev: false, force: false, noInstall: false, write: $this->silent,
+    );
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction acme/one');
+});
+
+it('requires everything again when forced', function () {
+    file_put_contents($this->appBase.'/composer.json', json_encode(['require' => ['acme/one' => '*']]));
+    Process::fake();
+
+    app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one'], dev: false, force: true, noInstall: false, write: $this->silent,
+    );
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction acme/one');
 });
 
 it('only writes the constraints with noInstall', function () {
     file_put_contents($this->appBase.'/composer.json', '{}');
     Process::fake();
 
-    app(RequireDependencies::class)->handle($this->local, [], force: false, noInstall: true, write: $this->silent);
+    app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one'], dev: false, force: false, noInstall: true, write: $this->silent,
+    );
 
-    Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require --no-interaction --no-update '));
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction --no-update acme/one');
 });
 
 it('prefixes composer with sail from the host', function () {
@@ -54,7 +94,8 @@ it('prefixes composer with sail from the host', function () {
 
     app(RequireDependencies::class)->handle(
         new ResolvedRuntime(Runtime::Sail, insideContainer: false),
-        [],
+        ['acme/one'],
+        dev: false,
         force: false,
         noInstall: false,
         write: $this->silent,
@@ -67,32 +108,21 @@ it('reports a failing composer run', function () {
     file_put_contents($this->appBase.'/composer.json', '{}');
     Process::fake(['*' => Process::result(exitCode: 1)]);
 
-    $outcomes = app(RequireDependencies::class)->handle($this->local, [], force: false, noInstall: false, write: $this->silent);
+    $outcomes = app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one'], dev: false, force: false, noInstall: false, write: $this->silent,
+    );
 
-    expect($outcomes['composer require'])->toBe(Outcome::Failed);
+    expect($outcomes)->toBe(['composer require' => Outcome::Failed]);
 });
 
 it('does nothing without composer.json', function () {
     Process::fake();
 
-    expect(app(RequireDependencies::class)->handle($this->local, [], force: false, noInstall: false, write: $this->silent))
-        ->toBe([]);
-
-    Process::assertNothingRan();
-});
-
-it('adds the chosen packages to the mandatory ones', function () {
-    file_put_contents($this->appBase.'/composer.json', '{}');
-    Process::fake();
-
-    app(RequireDependencies::class)->handle(
-        $this->local,
-        [Package::QueryBuilder, Package::Data],
-        force: false,
-        noInstall: false,
-        write: $this->silent,
+    $outcomes = app(RequireDependencies::class)->handle(
+        $this->local, ['acme/one'], dev: false, force: false, noInstall: false, write: $this->silent,
     );
 
-    Process::assertRan(fn ($process) => $process->command
-        === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data spatie/laravel-query-builder thecodingmachine/safe');
+    expect($outcomes)->toBe([]);
+
+    Process::assertNothingRan();
 });

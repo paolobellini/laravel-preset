@@ -8,13 +8,12 @@ use PaoloBellini\LaravelPreset\Data\ResolvedRuntime;
 use PaoloBellini\LaravelPreset\Enums\Outcome;
 use PaoloBellini\LaravelPreset\Enums\Runtime;
 
-it('patches composer.json and requires the dependencies', function () {
+it('patches composer.json and requires the dev dependencies', function () {
     file_put_contents($this->appBase.'/composer.json', '{}');
     Process::fake();
 
     $outcomes = app(InstallScripts::class)->handle(
         new ResolvedRuntime(Runtime::Local, insideContainer: false),
-        [],
         force: false,
         noInstall: false,
         write: fn (string $text) => null,
@@ -22,7 +21,10 @@ it('patches composer.json and requires the dependencies', function () {
 
     expect($outcomes)->toBe([
         'composer.json' => Outcome::Patched,
-        'composer require' => Outcome::Ran,
         'composer require --dev' => Outcome::Ran,
     ]);
+
+    Process::assertRan(fn ($process) => str_contains($process->command, 'pestphp/pest ')
+        && str_contains($process->command, 'vimeo/psalm'));
+    Process::assertNotRan(fn ($process) => str_contains($process->command, 'nunomaduro/essentials'));
 });

@@ -11,8 +11,8 @@ composer require paolobellini/laravel-preset --dev
 php artisan preset:install
 ```
 
-When the `scripts` group is selected, `preset:install` adds the dev
-dependencies with `composer require` (prefixed with `./vendor/bin/sail` when
+The `packages` and `scripts` groups add their dependencies with
+`composer require` (prefixed with `./vendor/bin/sail` when
 Laravel Sail is installed and the command runs on the host — inside the
 container, as with `sail artisan preset:install`, plain `composer` is used). No version constraint is ever passed, so composer
 resolves the newest stable release compatible with the project — the preset
@@ -21,7 +21,20 @@ constraints into `composer.json` without installing.
 
 ## What it does
 
-`php artisan preset:install` is interactive — pick any of the five groups:
+`php artisan preset:install` walks through the choices one step at a time and
+installs nothing until the plan is confirmed:
+
+| Step | Question | Groups |
+| --- | --- | --- |
+| 1 | Where the project's commands run (only on a host with Sail) | — |
+| 2 | Which optional runtime packages | `packages` — always installed |
+| 3 | Development tooling, yes or no, as one block | `configs`, `scripts` |
+| 4 | Which AI tooling | `ai`, `skills`, `codegraph` |
+| 5 | Which automation | `github`, `lefthook` |
+| 6 | The plan, then *Install the preset as planned?* | — |
+
+Passing a group flag (see [Flags](#flags)) skips the steps and installs exactly
+the flagged groups.
 
 ### `configs` — lint / format / static analysis
 
@@ -445,7 +458,8 @@ that ignores everything but itself, because the index is local to each machine.
 ## Flags
 
 ```bash
-php artisan preset:install --configs --ai --scripts --github   # pick groups
+php artisan preset:install --configs --ai --scripts --github   # pick groups, skips the steps
+php artisan preset:install --packages                          # runtime packages only
 php artisan preset:install --skills                            # agent skills only
 php artisan preset:install --codegraph                         # build the code graph
 php artisan preset:install --runtime=local                     # sail | local, skips the question
@@ -453,7 +467,8 @@ php artisan preset:install --force                             # overwrite exist
 php artisan preset:install --no-install                        # skip the auto composer update
 ```
 
-Without flags in a non-interactive shell, all groups install.
+Without flags in a non-interactive shell, the default groups install:
+`packages`, `configs`, `scripts`, `ai` and `github`.
 
 ### Runtime — where the project's commands run
 

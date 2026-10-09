@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PaoloBellini\LaravelPreset\Enums;
 
 enum Group: string {
+    case Packages = 'packages';
     case Configs = 'configs';
     case Ai = 'ai';
     case Scripts = 'scripts';
@@ -22,9 +23,10 @@ enum Group: string {
 
     public function title(): string {
         return match ($this) {
+            self::Packages => 'Runtime packages',
             self::Configs => 'Tooling configs',
             self::Ai => 'AI guidelines',
-            self::Scripts => 'Composer scripts and dependencies',
+            self::Scripts => 'Composer scripts and dev dependencies',
             self::Github => 'GitHub Actions',
             self::Lefthook => 'Lefthook',
             self::Skills => 'Agent skills',
@@ -34,9 +36,10 @@ enum Group: string {
 
     public function label(): string {
         return match ($this) {
-            self::Configs => 'Lint / format / static-analysis configs + dependencies',
+            self::Packages => 'Runtime packages the application code builds on',
+            self::Configs => 'Lint / format / static-analysis configs',
             self::Ai => 'The .ai conventions and guidelines',
-            self::Scripts => 'Composer quality scripts',
+            self::Scripts => 'Composer quality scripts + dev dependencies',
             self::Github => 'GitHub Actions workflows + dependency updates',
             self::Lefthook => 'Lefthook pre-commit hooks (requires the lefthook binary)',
             self::Skills => 'Agent skills for queues, transactions, scheduling, … (requires npx)',
@@ -46,7 +49,7 @@ enum Group: string {
 
     public function isDefault(): bool {
         return match ($this) {
-            self::Configs, self::Ai, self::Scripts, self::Github => true,
+            self::Packages, self::Configs, self::Ai, self::Scripts, self::Github => true,
             self::Lefthook, self::Skills, self::Codegraph => false,
         };
     }

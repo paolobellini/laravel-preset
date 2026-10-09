@@ -11,6 +11,7 @@ use PaoloBellini\LaravelPreset\Actions\InstallCodegraph;
 use PaoloBellini\LaravelPreset\Actions\InstallConfigs;
 use PaoloBellini\LaravelPreset\Actions\InstallGithub;
 use PaoloBellini\LaravelPreset\Actions\InstallLefthook;
+use PaoloBellini\LaravelPreset\Actions\InstallPackages;
 use PaoloBellini\LaravelPreset\Actions\InstallScripts;
 use PaoloBellini\LaravelPreset\Actions\InstallSkills;
 use PaoloBellini\LaravelPreset\Actions\ResolveGroups;
@@ -22,11 +23,14 @@ use PaoloBellini\LaravelPreset\Enums\Outcome;
 use PaoloBellini\LaravelPreset\Enums\Package;
 use PaoloBellini\LaravelPreset\Exceptions\InvalidRuntime;
 
+use function Laravel\Prompts\confirm;
+
 final class InstallCommand extends Command {
     protected $signature = 'preset:install
-        {--configs : Install lint/format/static-analysis configs and their dependencies}
+        {--packages : Install the runtime packages}
+        {--configs : Install lint/format/static-analysis configs}
         {--ai : Install the .ai conventions and guidelines}
-        {--scripts : Install composer quality scripts}
+        {--scripts : Install composer quality scripts and their dev dependencies}
         {--github : Install GitHub Actions workflows and the dependency update config}
         {--lefthook : Install the lefthook pre-commit config (opt-in)}
         {--skills : Install the agent skills into .agents/skills (opt-in)}
@@ -52,6 +56,7 @@ final class InstallCommand extends Command {
         private readonly ResolveGroups $resolveGroups,
         private readonly ResolvePackages $resolvePackages,
         private readonly BuildCommand $buildCommand,
+        private readonly InstallPackages $installPackages,
         private readonly InstallConfigs $installConfigs,
         private readonly InstallAi $installAi,
         private readonly InstallScripts $installScripts,
@@ -85,10 +90,19 @@ final class InstallCommand extends Command {
             fn (Group $group): bool => (bool) $this->option($group->value),
         ));
 
-        $resolvedGroups = $this->resolveGroups->handle($flagged, $this->input->isInteractive());
+        $interactive = $this->input->isInteractive();
+        $guided = $flagged === [] && $interactive;
 
-        if (in_array(Group::Scripts, $resolvedGroups, true)) {
-            $this->packages = $this->resolvePackages->handle($this->input->isInteractive());
+        if ($flagged === [] || in_array(Group::Packages, $flagged, true)) {
+            $this->packages = $this->resolvePackages->handle($interactive);
+        }
+
+        $resolvedGroups = $this->resolveGroups->handle($flagged, $interactive);
+
+        if ($guided && ! $this->confirmPlan($resolvedGroups)) {
+            $this->components->warn('Nothing installed.');
+
+            return self::SUCCESS;
         }
 
         foreach (Group::cases() as $group) {
@@ -129,11 +143,17 @@ final class InstallCommand extends Command {
         $write = fn (string $text) => $this->output->write($text);
 
         return match ($group) {
+            Group::Packages => $this->installPackages->handle(
+                $this->resolved,
+                $this->packages,
+                $force,
+                (bool) $this->option('no-install'),
+                $write,
+            ),
             Group::Configs => $this->installConfigs->handle($force),
             Group::Ai => $this->installAi->handle($force),
             Group::Scripts => $this->installScripts->handle(
                 $this->resolved,
-                $this->packages,
                 $force,
                 (bool) $this->option('no-install'),
                 $write,
@@ -148,6 +168,31 @@ final class InstallCommand extends Command {
             Group::Skills => $this->installSkills->handle($write),
             Group::Codegraph => $this->installCodegraph->handle($this->resolved, $force, $interactive, $write),
         };
+    }
+
+    /**
+     * @param  array<int, Group>  $groups
+     */
+    private function confirmPlan(array $groups): bool {
+        $names = InstallPackages::MANDATORY;
+
+        foreach ($this->packages as $package) {
+            $names[] = $package->composerName();
+        }
+
+        $titles = [];
+
+        foreach (Group::cases() as $group) {
+            if (in_array($group, $groups, true)) {
+                $titles[] = $group->title();
+            }
+        }
+
+        $this->components->info('Plan');
+        $this->components->twoColumnDetail('Packages', implode(', ', $names));
+        $this->components->bulletList($titles);
+
+        return confirm('Install the preset as planned?');
     }
 
     /**
