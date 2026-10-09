@@ -485,7 +485,7 @@ it('requires the preset dependencies unconstrained so composer resolves the late
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data spatie/laravel-query-builder thecodingmachine/safe');
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data spatie/laravel-query-builder spatie/laravel-typescript-transformer thecodingmachine/safe');
 
     Process::assertRan(function ($process) {
         return str_starts_with($process->command, 'composer require --dev --no-interaction ')
@@ -498,7 +498,7 @@ it('requires the preset dependencies unconstrained so composer resolves the late
             && str_contains($process->command, 'pestphp/pest-plugin-mutate')
             && str_contains($process->command, 'rector/rector')
             && str_contains($process->command, 'thecodingmachine/phpstan-safe-rule')
-            && str_contains($process->command, 'spatie/laravel-typescript-transformer')
+            && ! str_contains($process->command, 'spatie/laravel-typescript-transformer')
             && str_contains($process->command, 'vimeo/psalm')
             && ! str_contains($process->command, 'barryvdh/laravel-ide-helper')
             && ! str_contains($process->command, ':^');
@@ -518,6 +518,19 @@ it('skips packages the project already requires', function () {
 
     expect(json_decode(file_get_contents($this->appBase.'/composer.json'), true)['require-dev']['rector/rector'])
         ->toBe('^1.0');
+});
+
+it('moves a runtime package out of require-dev', function () {
+    seed($this->appBase);
+    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
+    $composer['require']['spatie/laravel-data'] = '^4.0';
+    $composer['require-dev']['spatie/laravel-typescript-transformer'] = '^3.0';
+    file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-query-builder spatie/laravel-typescript-transformer thecodingmachine/safe');
 });
 
 it('re-requires already present packages with --force', function () {

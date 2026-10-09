@@ -5,6 +5,21 @@ All notable changes to `paolobellini/laravel-preset` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **scripts** — `spatie/laravel-typescript-transformer` moved from
+  `require-dev` to `require`. `php artisan typescript:install` publishes
+  `app/Providers/TypeScriptTransformerServiceProvider.php`, which extends a
+  package class and is registered in `bootstrap/providers.php`, so the
+  application failed to boot after `composer install --no-dev`.
+- **scripts** — a runtime dependency (`nunomaduro/essentials`,
+  `spatie/laravel-data`, `spatie/laravel-query-builder`,
+  `spatie/laravel-typescript-transformer`, `thecodingmachine/safe`) already
+  listed in `require-dev` is no longer skipped: it is required again, which
+  moves it to `require`.
+
 ## [1.1.0] - 2026-09-15
 
 ### Changed
