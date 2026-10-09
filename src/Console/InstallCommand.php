@@ -711,13 +711,9 @@ final class InstallCommand extends Command {
 
         $target = $this->basePath($destination);
 
-        $files->put($target, str_replace(
-            self::SAIL_BINARY.' composer ',
-            'composer ',
-            $files->get($target),
-        ));
+        $files->put($target, str_replace(self::SAIL_BINARY.' ', '', $files->get($target)));
 
-        $this->line('  <fg=yellow>adjusted</> '.$destination.' (sail not detected, using plain composer)');
+        $this->line('  <fg=yellow>adjusted</> '.$destination.' (sail not detected, running the tools directly)');
     }
 
     private function copyDirectory(Filesystem $files, string $stub, string $destination): void {

@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   building the index with `codegraph init --yes`. Inside the Sail container the
   group stops with a notice instead of looking for a binary that lives on the
   host.
+- **lefthook** — the `prettier` and `eslint` jobs ran `npx` on the host while
+  the PHP jobs ran in the Sail container, so a hook could use a different Node
+  than `sail composer ci:node` (or fail with none installed). Both are now
+  prefixed with `vendor/bin/sail`, stripped like the others when Sail is not
+  detected.
 - **lefthook** — the `stan` job matched every staged `*.php`, handing PHPStan
   files outside the `paths` of `phpstan.neon` (`rector.php`, migrations,
   `public/index.php`, …) and failing commits CI would pass. Its `glob` and

@@ -135,8 +135,10 @@ Paths given on the command line also replace the `paths` of `phpstan.neon`, so
 the `stan` job's `glob` and `exclude` repeat them: a staged `rector.php` or
 migration is never handed to PHPStan. Change one, change the other.
 
-The commands are prefixed with `vendor/bin/sail` only when Sail is detected in
-the project; otherwise the prefix is stripped from the copied file.
+Every job — the Node ones included (`vendor/bin/sail npx prettier`, `… eslint`)
+— is prefixed with `vendor/bin/sail` when Sail is detected in the project, so a
+hook runs the same PHP and Node as `sail composer ci`, never whatever the host
+happens to have. Without Sail the prefix is stripped from the copied file.
 
 **Opt-in** — unlike the other groups it is never selected by default: pass
 `--lefthook`, or tick it in the interactive prompt.

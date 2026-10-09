@@ -92,6 +92,8 @@ it('keeps the sail prefix in lefthook.yml when sail is configured', function () 
         ->toContain('vendor/bin/sail composer pint -- {staged_files}')
         ->toContain('vendor/bin/sail composer stan -- {staged_files}')
         ->toContain('vendor/bin/sail composer test:coverage')
+        ->toContain('vendor/bin/sail npx prettier --write {staged_files}')
+        ->toContain('vendor/bin/sail npx eslint --fix {staged_files}')
         ->toContain('vendor/bin/sail composer test:mutate');
 });
 
@@ -112,7 +114,9 @@ it('strips the sail prefix from lefthook.yml when sail is not installed', functi
     expect($lefthook)->not->toContain('vendor/bin/sail')
         ->and($lefthook)->toContain('run: composer pint -- {staged_files}')
         ->and($lefthook)->toContain('run: composer stan -- {staged_files}')
-        ->and($lefthook)->toContain('run: composer test:mutate');
+        ->and($lefthook)->toContain('run: composer test:mutate')
+        ->and($lefthook)->toContain('run: npx prettier --write {staged_files}')
+        ->and($lefthook)->toContain('run: npx eslint --fix {staged_files}');
 });
 
 it('strips the sail prefix when sail is installed but not configured', function () {
