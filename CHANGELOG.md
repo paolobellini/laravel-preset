@@ -12,9 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **runtime** — the installer now settles where the project's commands run
   before anything else. On a host with Sail configured it asks (Sail or local);
   elsewhere it is detected. `--runtime=sail|local` answers without a prompt.
+- **packages** — the runtime packages are no longer all-or-nothing.
+  `nunomaduro/essentials` and `thecodingmachine/safe` stay mandatory;
+  `spatie/laravel-data`, `spatie/laravel-query-builder` and
+  `spatie/laravel-typescript-transformer` are picked one by one, the last
+  offered only on a project that requires `inertiajs/inertia-laravel`.
 
 ### Changed
 
+- **scripts** — a non-interactive run on a project without Inertia no longer
+  requires `spatie/laravel-typescript-transformer`.
 - **output** — every group now prints one report: a line per file or command
   with its outcome (`created`, `patched`, `removed`, `skipped`, `done`,
   `failed`). The per-file hints such as *exists, use --force* are gone; a

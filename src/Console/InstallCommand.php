@@ -14,10 +14,12 @@ use PaoloBellini\LaravelPreset\Actions\InstallLefthook;
 use PaoloBellini\LaravelPreset\Actions\InstallScripts;
 use PaoloBellini\LaravelPreset\Actions\InstallSkills;
 use PaoloBellini\LaravelPreset\Actions\ResolveGroups;
+use PaoloBellini\LaravelPreset\Actions\ResolvePackages;
 use PaoloBellini\LaravelPreset\Actions\ResolveRuntime;
 use PaoloBellini\LaravelPreset\Data\ResolvedRuntime;
 use PaoloBellini\LaravelPreset\Enums\Group;
 use PaoloBellini\LaravelPreset\Enums\Outcome;
+use PaoloBellini\LaravelPreset\Enums\Package;
 use PaoloBellini\LaravelPreset\Exceptions\InvalidRuntime;
 
 final class InstallCommand extends Command {
@@ -40,9 +42,15 @@ final class InstallCommand extends Command {
 
     private ResolvedRuntime $resolved;
 
+    /**
+     * @var array<int, Package>
+     */
+    private array $packages = [];
+
     public function __construct(
         private readonly ResolveRuntime $resolveRuntime,
         private readonly ResolveGroups $resolveGroups,
+        private readonly ResolvePackages $resolvePackages,
         private readonly BuildCommand $buildCommand,
         private readonly InstallConfigs $installConfigs,
         private readonly InstallAi $installAi,
@@ -78,6 +86,10 @@ final class InstallCommand extends Command {
         ));
 
         $resolvedGroups = $this->resolveGroups->handle($flagged, $this->input->isInteractive());
+
+        if (in_array(Group::Scripts, $resolvedGroups, true)) {
+            $this->packages = $this->resolvePackages->handle($this->input->isInteractive());
+        }
 
         foreach (Group::cases() as $group) {
             if (in_array($group, $resolvedGroups, true)) {
@@ -121,6 +133,7 @@ final class InstallCommand extends Command {
             Group::Ai => $this->installAi->handle($force),
             Group::Scripts => $this->installScripts->handle(
                 $this->resolved,
+                $this->packages,
                 $force,
                 (bool) $this->option('no-install'),
                 $write,

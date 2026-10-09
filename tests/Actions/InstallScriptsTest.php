@@ -14,6 +14,7 @@ it('patches composer.json and requires the dependencies', function () {
 
     $outcomes = app(InstallScripts::class)->handle(
         new ResolvedRuntime(Runtime::Local, insideContainer: false),
+        [],
         force: false,
         noInstall: false,
         write: fn (string $text) => null,

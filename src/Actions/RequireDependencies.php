@@ -9,6 +9,7 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Filesystem\Filesystem;
 use PaoloBellini\LaravelPreset\Data\ResolvedRuntime;
 use PaoloBellini\LaravelPreset\Enums\Outcome;
+use PaoloBellini\LaravelPreset\Enums\Package;
 
 final readonly class RequireDependencies {
     /**
@@ -16,9 +17,6 @@ final readonly class RequireDependencies {
      */
     private const REQUIRE = [
         'nunomaduro/essentials',
-        'spatie/laravel-data',
-        'spatie/laravel-query-builder',
-        'spatie/laravel-typescript-transformer',
         'thecodingmachine/safe',
     ];
 
@@ -53,10 +51,11 @@ final readonly class RequireDependencies {
     ) {}
 
     /**
+     * @param  array<int, Package>  $packages
      * @param  Closure(string): void  $write
      * @return array<string, Outcome>
      */
-    public function handle(ResolvedRuntime $resolved, bool $force, bool $noInstall, Closure $write): array {
+    public function handle(ResolvedRuntime $resolved, array $packages, bool $force, bool $noInstall, Closure $write): array {
         $path = $this->app->basePath('composer.json');
 
         if (! $this->files->exists($path)) {
@@ -71,17 +70,25 @@ final readonly class RequireDependencies {
         /** @var array<string, string> $requireDev */
         $requireDev = $composer['require-dev'] ?? [];
 
+        $runtime = self::REQUIRE;
+
+        foreach ($packages as $package) {
+            $runtime[] = $package->composerName();
+        }
+
+        sort($runtime);
+
         $flags = $noInstall ? '--no-interaction --no-update' : '--no-interaction';
 
         $batches = [
-            'composer require' => $this->missing(self::REQUIRE, $require, $force),
+            'composer require' => $this->missing($runtime, $require, $force),
             'composer require --dev' => $this->missing(self::REQUIRE_DEV, $require + $requireDev, $force),
         ];
 
         $outcomes = [];
 
-        foreach ($batches as $composerCommand => $packages) {
-            if ($packages === []) {
+        foreach ($batches as $composerCommand => $names) {
+            if ($names === []) {
                 $outcomes[$composerCommand] = Outcome::Skipped;
 
                 continue;
@@ -89,7 +96,7 @@ final readonly class RequireDependencies {
 
             $command = $this->buildCommand->handle(
                 $resolved,
-                "{$composerCommand} {$flags} ".implode(' ', $packages),
+                "{$composerCommand} {$flags} ".implode(' ', $names),
             );
 
             $outcomes[$composerCommand] = $this->runProcess->handle($command, $write)

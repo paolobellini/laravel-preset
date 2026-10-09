@@ -529,7 +529,7 @@ it('requires the preset dependencies unconstrained so composer resolves the late
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
 
-    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data spatie/laravel-query-builder spatie/laravel-typescript-transformer thecodingmachine/safe');
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data spatie/laravel-query-builder thecodingmachine/safe');
 
     Process::assertRan(function ($process) {
         return str_starts_with($process->command, 'composer require --dev --no-interaction ')
@@ -572,9 +572,49 @@ it('moves a runtime package out of require-dev', function () {
     file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
     Process::fake();
 
-    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+    $this->artisan('preset:install', ['--scripts' => true])
+        ->expectsQuestion('Which optional packages does this project need?', ['data', 'query-builder', 'typescript-transformer'])
+        ->assertSuccessful();
 
     Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-query-builder spatie/laravel-typescript-transformer thecodingmachine/safe');
+});
+
+it('requires only the mandatory packages when none is picked', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install', ['--scripts' => true])
+        ->expectsQuestion('Which optional packages does this project need?', [])
+        ->assertSuccessful();
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials thecodingmachine/safe');
+});
+
+it('adds the typescript transformer on an inertia project', function () {
+    seed($this->appBase);
+    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
+    $composer['require']['inertiajs/inertia-laravel'] = '^2.0';
+    file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
+    Process::fake();
+
+    Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);
+
+    Process::assertRan(fn ($process) => str_contains($process->command, 'spatie/laravel-typescript-transformer'));
+});
+
+it('asks which optional packages to install', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install', ['--scripts' => true])
+        ->expectsQuestion('Which optional packages does this project need?', ['data'])
+        ->assertSuccessful();
+
+    Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data thecodingmachine/safe');
+});
+
+it('does not ask for packages when the scripts group is left out', function () {
+    $this->artisan('preset:install', ['--configs' => true])->assertSuccessful();
 });
 
 it('re-requires already present packages with --force', function () {
@@ -626,6 +666,7 @@ it('asks where the commands run when sail is configured on the host', function (
 
     $this->artisan('preset:install', ['--scripts' => true])
         ->expectsQuestion('Where do this project\'s commands run?', 'local')
+        ->expectsQuestion('Which optional packages does this project need?', [])
         ->assertSuccessful();
 
     Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
@@ -656,6 +697,7 @@ it('takes the runtime from the option without asking', function () {
     Process::fake();
 
     $this->artisan('preset:install', ['--scripts' => true, '--lefthook' => true, '--runtime' => 'local'])
+        ->expectsQuestion('Which optional packages does this project need?', [])
         ->assertSuccessful();
 
     Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
