@@ -11,8 +11,8 @@ composer require paolobellini/laravel-preset --dev
 php artisan preset:install
 ```
 
-When the `scripts` group is selected, `preset:install` adds the dev
-dependencies with `composer require` (prefixed with `./vendor/bin/sail` when
+The `packages` and `scripts` groups add their dependencies with
+`composer require` (prefixed with `./vendor/bin/sail` when
 Laravel Sail is installed and the command runs on the host — inside the
 container, as with `sail artisan preset:install`, plain `composer` is used). No version constraint is ever passed, so composer
 resolves the newest stable release compatible with the project — the preset
@@ -21,7 +21,52 @@ constraints into `composer.json` without installing.
 
 ## What it does
 
-`php artisan preset:install` is interactive — pick any of the five groups:
+`php artisan preset:install` walks through the choices one step at a time and
+installs nothing until the plan is confirmed:
+
+| Step | Question | Groups |
+| --- | --- | --- |
+| 1 | Where the project's commands run (only on a host with Sail) | — |
+| 2 | Which optional runtime packages | `packages` — always installed |
+| 3 | Development tooling, yes or no, as one block | `configs`, `scripts` |
+| 4 | Which AI tooling | `ai`, `skills`, `codegraph` |
+| 5 | Which automation | `github`, `lefthook` |
+| 6 | The plan, then *Install the preset as planned?* | — |
+
+Passing a group flag (see [Flags](#flags)) skips the steps and installs exactly
+the flagged groups.
+
+The confirmed choices are saved to `preset.json` at the project root — commit
+it. The next run finds it and asks *Reuse the choices saved in preset.json?*
+instead of walking through the steps again; a non-interactive run follows it
+without asking. Flagged runs neither read nor write it.
+
+```json
+{
+    "runtime": "sail",
+    "packages": ["data", "query-builder"],
+    "groups": ["packages", "configs", "scripts", "ai", "github"]
+}
+```
+
+### `packages` — runtime packages
+
+`nunomaduro/essentials` and `thecodingmachine/safe` always go into `require`.
+Three more are optional and asked for one by one:
+
+| Package | Offered |
+|---|---|
+| `spatie/laravel-data` | always |
+| `spatie/laravel-query-builder` | always |
+| `spatie/laravel-typescript-transformer` | only when the project requires `inertiajs/inertia-laravel` |
+
+A non-interactive run takes every package offered. All of them go into
+`require` — the application loads them at runtime, so they must survive
+`composer install --no-dev`. One of them found in `require-dev` is moved to
+`require`.
+
+Also copies `config/essentials.php` — the nunomaduro/essentials overrides
+(`Unguard => true`, inverse of the package default).
 
 ### `configs` — lint / format / static analysis
 
@@ -34,18 +79,22 @@ Copies the configs not already in the starter kit:
 | `rector.php` | Rector + rector-laravel sets, scoped to `app/` and `database/` |
 | `rector-tests.php` | Rector for `tests/` — `LARAVEL_TESTING` + `PestSetList::CODING_STYLE` |
 | `psalm.xml` | Psalm, scoped to taint analysis only (`errorLevel="8"`) |
-| `config/essentials.php` | nunomaduro/essentials — custom overrides (`Unguard => true`, inverse of the package default) |
 | `tests/Pest.php` | created when missing (`extend(TestCase)` + `RefreshDatabase`), otherwise **patched** with `pest()->tia()->locally()` |
 
 ### `ai` — conventions
 
-Copies the `.ai/` directory only:
+Copies the `.ai/` directory and adds `laravel/boost` to `require-dev`:
 
 - `.ai/guidelines/personal/*` — precedence, comments, commits, controllers
   (action pattern), actions, caching, enums, exceptions, form-requests,
   frontend, models, pest-agent, php (Safe functions), policies, query-builder,
   resources, testing, traits, translations, typescript, workflow.
 - `.ai/mcp/mcp.json`.
+
+`query-builder.md` and `typescript.md` are copied only when their package is
+part of the project — picked in the same run, or already in `require`. The
+guidelines that merely mention an optional package (`controllers.md`,
+`frontend.md`) say what to do without it.
 
 ### `scripts` — composer quality scripts + dev deps
 
@@ -55,16 +104,12 @@ every install picks up the current stable release.
 
 Added to `require-dev` (anything already required is left untouched, use
 `--force` to re-require it at the latest version): `fruitcake/laravel-debugbar`,
-`larastan/larastan`, `laravel/pint`, `laravel/boost`, `laravel/pail`,
+`larastan/larastan`, `laravel/pint`, `laravel/pail`,
 `rector/rector`, `driftingly/rector-laravel`, `pestphp/pest` and the
 `pest-plugin-{type-coverage,mutate,rector,phpstan,evals,agent,faker}` plugins,
 `thecodingmachine/phpstan-safe-rule`, `vimeo/psalm`.
-`nunomaduro/essentials`, `spatie/laravel-data`, `spatie/laravel-query-builder`,
-`spatie/laravel-typescript-transformer` and `thecodingmachine/safe` go into
-`require` — the application loads them at runtime, so they must survive
-`composer install --no-dev`. One of them found in `require-dev` is moved to
-`require`. `nunomaduro/collision` and `pestphp/pest-plugin-laravel` are **not**
-added — they already ship with the starter kit.
+`nunomaduro/collision` and `pestphp/pest-plugin-laravel` are **not** added —
+they already ship with the starter kit.
 
 `config.allow-plugins` gets `pestphp/pest-plugin` so the pest plugins can boot.
 
@@ -135,8 +180,10 @@ Paths given on the command line also replace the `paths` of `phpstan.neon`, so
 the `stan` job's `glob` and `exclude` repeat them: a staged `rector.php` or
 migration is never handed to PHPStan. Change one, change the other.
 
-The commands are prefixed with `vendor/bin/sail` only when Sail is detected in
-the project; otherwise the prefix is stripped from the copied file.
+Every job — the Node ones included (`vendor/bin/sail npx prettier`, `… eslint`)
+— is prefixed with `vendor/bin/sail` when Sail is detected in the project, so a
+hook runs the same PHP and Node as `sail composer ci`, never whatever the host
+happens to have. Without Sail the prefix is stripped from the copied file.
 
 **Opt-in** — unlike the other groups it is never selected by default: pass
 `--lefthook`, or tick it in the interactive prompt.
@@ -436,14 +483,35 @@ that ignores everything but itself, because the index is local to each machine.
 ## Flags
 
 ```bash
-php artisan preset:install --configs --ai --scripts --github   # pick groups
+php artisan preset:install --configs --ai --scripts --github   # pick groups, skips the steps
+php artisan preset:install --packages                          # runtime packages only
 php artisan preset:install --skills                            # agent skills only
 php artisan preset:install --codegraph                         # build the code graph
+php artisan preset:install --runtime=local                     # sail | local, skips the question
 php artisan preset:install --force                             # overwrite existing files / deps
 php artisan preset:install --no-install                        # skip the auto composer update
 ```
 
-Without flags in a non-interactive shell, all groups install.
+Without flags in a non-interactive shell, `preset.json` is followed when it
+exists; otherwise the default groups install: `packages`, `configs`, `scripts`,
+`ai` and `github`.
+
+### Runtime — where the project's commands run
+
+The first thing the installer settles, because the rest depends on it: how
+`composer require` is launched and whether the lefthook jobs carry the
+`vendor/bin/sail` prefix.
+
+| Situation | Runtime | Asked? |
+| --- | --- | --- |
+| No Sail (`vendor/bin/sail` or a compose file missing) | local | no |
+| Sail configured, installer run on the host | Sail by default | yes |
+| Installer run inside the container (`sail artisan …`) | Sail | no |
+
+`--runtime=sail|local` answers up front; a non-interactive run takes the default.
+Inside the container the runtime is still Sail — the files written for the
+project keep the prefix — but the installer's own commands run directly, since
+it is already where Sail would have sent them.
 
 ## Conventions in brief
 

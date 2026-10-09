@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **runtime** — the installer now settles where the project's commands run
+  before anything else. On a host with Sail configured it asks (Sail or local);
+  elsewhere it is detected. `--runtime=sail|local` answers without a prompt.
+- **packages** — the runtime packages are no longer all-or-nothing.
+  `nunomaduro/essentials` and `thecodingmachine/safe` stay mandatory;
+  `spatie/laravel-data`, `spatie/laravel-query-builder` and
+  `spatie/laravel-typescript-transformer` are picked one by one, the last
+  offered only on a project that requires `inertiajs/inertia-laravel`.
+
+- **steps** — without flags the installer is now a guided procedure: runtime,
+  optional packages, development tooling as one block, AI tooling, automation,
+  then the plan and a confirmation. Nothing is written before the confirmation.
+- **preset.json** — the choices of a run without flags are saved at the
+  project root and offered again on the next run; a non-interactive run
+  follows them.
+- **packages** — new `packages` group and `--packages` flag for the runtime
+  packages, which no longer ride along with `scripts`.
+
+### Changed
+
+- **scripts** — `--scripts` now requires only the dev dependencies; the runtime
+  packages moved to `--packages`.
+- **ai** — `laravel/boost` is required by the `ai` group instead of `scripts`.
+  The `query-builder.md` and `typescript.md` guidelines are copied only when
+  their package is part of the project, and `controllers.md` / `frontend.md`
+  say what to do without the optional packages.
+- **packages** — `config/essentials.php` is copied with the runtime packages
+  instead of the tooling configs.
+
+- **scripts** — a non-interactive run on a project without Inertia no longer
+  requires `spatie/laravel-typescript-transformer`.
+- **output** — every group now prints one report: a line per file or command
+  with its outcome (`created`, `patched`, `removed`, `skipped`, `done`,
+  `failed`). The per-file hints such as *exists, use --force* are gone; a
+  `skipped` file is one that was already there.
+
 ### Fixed
 
 - **scripts** — `spatie/laravel-typescript-transformer` moved from
@@ -32,6 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   building the index with `codegraph init --yes`. Inside the Sail container the
   group stops with a notice instead of looking for a binary that lives on the
   host.
+- **lefthook** — the `prettier` and `eslint` jobs ran `npx` on the host while
+  the PHP jobs ran in the Sail container, so a hook could use a different Node
+  than `sail composer ci:node` (or fail with none installed). Both are now
+  prefixed with `vendor/bin/sail`, stripped like the others when Sail is not
+  detected.
 - **lefthook** — the `stan` job matched every staged `*.php`, handing PHPStan
   files outside the `paths` of `phpstan.neon` (`rector.php`, migrations,
   `public/index.php`, …) and failing commits CI would pass. Its `glob` and
