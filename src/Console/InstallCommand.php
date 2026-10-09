@@ -166,6 +166,7 @@ final class InstallCommand extends Command {
         'nunomaduro/essentials',
         'spatie/laravel-data',
         'spatie/laravel-query-builder',
+        'spatie/laravel-typescript-transformer',
         'thecodingmachine/safe',
     ];
 
@@ -188,7 +189,6 @@ final class InstallCommand extends Command {
         'pestphp/pest-plugin-rector',
         'pestphp/pest-plugin-type-coverage',
         'rector/rector',
-        'spatie/laravel-typescript-transformer',
         'thecodingmachine/phpstan-safe-rule',
         'vimeo/psalm',
     ];
@@ -625,7 +625,9 @@ final class InstallCommand extends Command {
         /** @var array<string, string> $requireDev */
         $requireDev = $composer['require-dev'] ?? [];
 
-        $missing = $this->missingPackages(self::COMPOSER_REQUIRE, $require + $requireDev);
+        // Checked against `require` alone: a runtime package sitting in `require-dev`
+        // is required again, which makes composer move it.
+        $missing = $this->missingPackages(self::COMPOSER_REQUIRE, $require);
         $missingDev = $this->missingPackages(self::COMPOSER_REQUIRE_DEV, $require + $requireDev);
 
         if ($missing === [] && $missingDev === []) {

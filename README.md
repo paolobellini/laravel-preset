@@ -57,12 +57,13 @@ Added to `require-dev` (anything already required is left untouched, use
 `larastan/larastan`, `laravel/pint`, `laravel/boost`, `laravel/pail`,
 `rector/rector`, `driftingly/rector-laravel`, `pestphp/pest` and the
 `pest-plugin-{type-coverage,mutate,rector,phpstan,evals,agent,faker}` plugins,
-`thecodingmachine/phpstan-safe-rule`, `spatie/laravel-typescript-transformer`,
-`vimeo/psalm`.
-`nunomaduro/essentials`, `spatie/laravel-data`, `spatie/laravel-query-builder`
-and `thecodingmachine/safe` go into `require`. `nunomaduro/collision` and
-`pestphp/pest-plugin-laravel` are **not** added — they already ship with the
-starter kit.
+`thecodingmachine/phpstan-safe-rule`, `vimeo/psalm`.
+`nunomaduro/essentials`, `spatie/laravel-data`, `spatie/laravel-query-builder`,
+`spatie/laravel-typescript-transformer` and `thecodingmachine/safe` go into
+`require` — the application loads them at runtime, so they must survive
+`composer install --no-dev`. One of them found in `require-dev` is moved to
+`require`. `nunomaduro/collision` and `pestphp/pest-plugin-laravel` are **not**
+added — they already ship with the starter kit.
 
 `config.allow-plugins` gets `pestphp/pest-plugin` so the pest plugins can boot.
 
