@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `spatie/laravel-typescript-transformer`, `thecodingmachine/safe`) already
   listed in `require-dev` is no longer skipped: it is required again, which
   moves it to `require`.
+- **scripts** — `sail artisan preset:install` failed with *Docker is not
+  running*: the command, already inside the container, called
+  `./vendor/bin/sail composer require`, and Sail found no Docker there. With
+  `LARAVEL_SAIL` set it now calls `composer` directly.
 - **lefthook** — the `stan` job matched every staged `*.php`, handing PHPStan
   files outside the `paths` of `phpstan.neon` (`rector.php`, migrations,
   `public/index.php`, …) and failing commits CI would pass. Its `glob` and
