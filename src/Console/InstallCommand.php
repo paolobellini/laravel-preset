@@ -147,7 +147,11 @@ final class InstallCommand extends Command {
 
     private const CODEGRAPH_DIR = '.codegraph';
 
-    private const CODEGRAPH_INSTALLER = 'npx --yes @colbymchenry/codegraph';
+    private const CODEGRAPH_INSTALLER = 'npm install --global @colbymchenry/codegraph';
+
+    private const CODEGRAPH_WIRE = 'codegraph install --yes --target claude --location local';
+
+    private const CODEGRAPH_INIT = 'codegraph init --yes';
 
     private const BOOST_CONFIG = 'boost.json';
 
@@ -463,12 +467,25 @@ final class InstallCommand extends Command {
     }
 
     /**
-     * `codegraph init` creates .codegraph/ and builds the graph in one step. The
-     * binary is installed once per machine, not per project, so a missing one is
-     * reported rather than installed here.
+     * Wires CodeGraph into the project (`.mcp.json`, `.claude/`) and builds the
+     * index. The binary lives on the host, once per machine: from inside the Sail
+     * container it is neither visible nor worth installing.
      */
     private function installCodegraph(Filesystem $files): void {
+        if ($this->insideSail()) {
+            $this->components->warn(
+                'CodeGraph runs on the host, not in the Sail container. '
+                .'Run `php artisan preset:install --codegraph` outside Sail.'
+            );
+
+            return;
+        }
+
         if (! $this->hasCodegraph() && ! $this->setUpCodegraph()) {
+            return;
+        }
+
+        if (! $this->runProcess(self::CODEGRAPH_WIRE)) {
             return;
         }
 
@@ -482,25 +499,23 @@ final class InstallCommand extends Command {
             return;
         }
 
-        $this->runProcess(self::CODEGRAPH_BINARY.' init');
+        $this->runProcess(self::CODEGRAPH_INIT);
     }
 
     /**
-     * The installer is a per-machine step that also writes MCP config into every
-     * agent it detects, so it is offered rather than run: declining leaves the
-     * project untouched.
+     * The binary is the one thing that lands outside the project, so installing
+     * it is offered rather than run.
      */
     private function setUpCodegraph(): bool {
         if (! $this->input->isInteractive()) {
             $this->components->warn(
-                'CodeGraph is not on your PATH. Install it with '
-                .'`'.self::CODEGRAPH_INSTALLER.'`, then run `codegraph init` here.'
+                'CodeGraph is not on your PATH. Install it with `'.self::CODEGRAPH_INSTALLER.'`, then run this again.'
             );
 
             return false;
         }
 
-        if (! confirm(label: 'CodeGraph is not installed. Run its installer now?', default: false)) {
+        if (! confirm(label: 'CodeGraph is not installed. Install it now?', default: false)) {
             $this->components->warn('Skipped. Run `'.self::CODEGRAPH_INSTALLER.'` when you want it.');
 
             return false;
