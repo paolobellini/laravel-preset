@@ -5,7 +5,7 @@ All notable changes to `paolobellini/laravel-preset` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-10-09
 
 ### Added
 
@@ -460,5 +460,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `docker-compose.yml`), otherwise plain `composer update`. Skippable with
   `--no-install`.
 
+[1.2.0]: https://github.com/paolobellini/laravel-preset/releases/tag/v1.2.0
 [1.1.0]: https://github.com/paolobellini/laravel-preset/releases/tag/v1.1.0
 [1.0.0]: https://github.com/paolobellini/laravel-preset/releases/tag/v1.0.0
