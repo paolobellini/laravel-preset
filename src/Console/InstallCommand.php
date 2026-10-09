@@ -6,6 +6,7 @@ namespace PaoloBellini\LaravelPreset\Console;
 
 use Illuminate\Console\Command;
 use PaoloBellini\LaravelPreset\Actions\BuildCommand;
+use PaoloBellini\LaravelPreset\Actions\DetectPackages;
 use PaoloBellini\LaravelPreset\Actions\InstallAi;
 use PaoloBellini\LaravelPreset\Actions\InstallCodegraph;
 use PaoloBellini\LaravelPreset\Actions\InstallConfigs;
@@ -55,6 +56,7 @@ final class InstallCommand extends Command {
         private readonly ResolveRuntime $resolveRuntime,
         private readonly ResolveGroups $resolveGroups,
         private readonly ResolvePackages $resolvePackages,
+        private readonly DetectPackages $detectPackages,
         private readonly BuildCommand $buildCommand,
         private readonly InstallPackages $installPackages,
         private readonly InstallConfigs $installConfigs,
@@ -93,9 +95,11 @@ final class InstallCommand extends Command {
         $interactive = $this->input->isInteractive();
         $guided = $flagged === [] && $interactive;
 
-        if ($flagged === [] || in_array(Group::Packages, $flagged, true)) {
-            $this->packages = $this->resolvePackages->handle($interactive);
-        }
+        $installsPackages = $flagged === [] || in_array(Group::Packages, $flagged, true);
+
+        $this->packages = $installsPackages
+            ? $this->resolvePackages->handle($interactive)
+            : $this->detectPackages->handle();
 
         $resolvedGroups = $this->resolveGroups->handle($flagged, $interactive);
 
@@ -151,7 +155,13 @@ final class InstallCommand extends Command {
                 $write,
             ),
             Group::Configs => $this->installConfigs->handle($force),
-            Group::Ai => $this->installAi->handle($force),
+            Group::Ai => $this->installAi->handle(
+                $this->resolved,
+                $this->packages,
+                $force,
+                (bool) $this->option('no-install'),
+                $write,
+            ),
             Group::Scripts => $this->installScripts->handle(
                 $this->resolved,
                 $force,

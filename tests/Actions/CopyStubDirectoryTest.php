@@ -22,3 +22,11 @@ it('leaves the files that already exist', function () {
     expect($outcomes['.github/dependabot.yml'])->toBe(Outcome::Skipped)
         ->and(file_get_contents($this->appBase.'/.github/dependabot.yml'))->toBe('mine');
 });
+
+it('leaves out the excepted files', function () {
+    $outcomes = app(CopyStubDirectory::class)->handle('github', '.github', force: false, except: ['workflows/tests.yml']);
+
+    expect($outcomes)->not->toHaveKey('.github/workflows/tests.yml')
+        ->and($this->appBase.'/.github/workflows/tests.yml')->not->toBeFile()
+        ->and($this->appBase.'/.github/workflows/analyse.yml')->toBeFile();
+});

@@ -15,7 +15,6 @@ final readonly class InstallConfigs {
         'configs/phpstan.neon' => 'phpstan.neon',
         'configs/rector.php' => 'rector.php',
         'configs/rector-tests.php' => 'rector-tests.php',
-        'configs/essentials.php' => 'config/essentials.php',
         'configs/psalm.xml' => 'psalm.xml',
     ];
 

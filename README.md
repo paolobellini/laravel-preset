@@ -36,6 +36,25 @@ installs nothing until the plan is confirmed:
 Passing a group flag (see [Flags](#flags)) skips the steps and installs exactly
 the flagged groups.
 
+### `packages` — runtime packages
+
+`nunomaduro/essentials` and `thecodingmachine/safe` always go into `require`.
+Three more are optional and asked for one by one:
+
+| Package | Offered |
+|---|---|
+| `spatie/laravel-data` | always |
+| `spatie/laravel-query-builder` | always |
+| `spatie/laravel-typescript-transformer` | only when the project requires `inertiajs/inertia-laravel` |
+
+A non-interactive run takes every package offered. All of them go into
+`require` — the application loads them at runtime, so they must survive
+`composer install --no-dev`. One of them found in `require-dev` is moved to
+`require`.
+
+Also copies `config/essentials.php` — the nunomaduro/essentials overrides
+(`Unguard => true`, inverse of the package default).
+
 ### `configs` — lint / format / static analysis
 
 Copies the configs not already in the starter kit:
@@ -47,18 +66,22 @@ Copies the configs not already in the starter kit:
 | `rector.php` | Rector + rector-laravel sets, scoped to `app/` and `database/` |
 | `rector-tests.php` | Rector for `tests/` — `LARAVEL_TESTING` + `PestSetList::CODING_STYLE` |
 | `psalm.xml` | Psalm, scoped to taint analysis only (`errorLevel="8"`) |
-| `config/essentials.php` | nunomaduro/essentials — custom overrides (`Unguard => true`, inverse of the package default) |
 | `tests/Pest.php` | created when missing (`extend(TestCase)` + `RefreshDatabase`), otherwise **patched** with `pest()->tia()->locally()` |
 
 ### `ai` — conventions
 
-Copies the `.ai/` directory only:
+Copies the `.ai/` directory and adds `laravel/boost` to `require-dev`:
 
 - `.ai/guidelines/personal/*` — precedence, comments, commits, controllers
   (action pattern), actions, caching, enums, exceptions, form-requests,
   frontend, models, pest-agent, php (Safe functions), policies, query-builder,
   resources, testing, traits, translations, typescript, workflow.
 - `.ai/mcp/mcp.json`.
+
+`query-builder.md` and `typescript.md` are copied only when their package is
+part of the project — picked in the same run, or already in `require`. The
+guidelines that merely mention an optional package (`controllers.md`,
+`frontend.md`) say what to do without it.
 
 ### `scripts` — composer quality scripts + dev deps
 
@@ -68,23 +91,12 @@ every install picks up the current stable release.
 
 Added to `require-dev` (anything already required is left untouched, use
 `--force` to re-require it at the latest version): `fruitcake/laravel-debugbar`,
-`larastan/larastan`, `laravel/pint`, `laravel/boost`, `laravel/pail`,
+`larastan/larastan`, `laravel/pint`, `laravel/pail`,
 `rector/rector`, `driftingly/rector-laravel`, `pestphp/pest` and the
 `pest-plugin-{type-coverage,mutate,rector,phpstan,evals,agent,faker}` plugins,
 `thecodingmachine/phpstan-safe-rule`, `vimeo/psalm`.
-`nunomaduro/essentials` and `thecodingmachine/safe` always go into `require`.
-Three more are optional and asked for one by one:
-
-| Package | Offered |
-|---|---|
-| `spatie/laravel-data` | always |
-| `spatie/laravel-query-builder` | always |
-| `spatie/laravel-typescript-transformer` | only when the project requires `inertiajs/inertia-laravel` |
-
-A non-interactive run takes every package offered. All of them go into `require` — the application loads
-them at runtime, so they must survive `composer install --no-dev`. One of them
-found in `require-dev` is moved to `require`. `nunomaduro/collision` and `pestphp/pest-plugin-laravel` are **not**
-added — they already ship with the starter kit.
+`nunomaduro/collision` and `pestphp/pest-plugin-laravel` are **not** added —
+they already ship with the starter kit.
 
 `config.allow-plugins` gets `pestphp/pest-plugin` so the pest plugins can boot.
 

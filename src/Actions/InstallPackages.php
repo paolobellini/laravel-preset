@@ -18,7 +18,12 @@ final readonly class InstallPackages {
         'thecodingmachine/safe',
     ];
 
-    public function __construct(private RequireDependencies $requireDependencies) {}
+    private const ESSENTIALS_CONFIG = 'config/essentials.php';
+
+    public function __construct(
+        private CopyStub $copyStub,
+        private RequireDependencies $requireDependencies,
+    ) {}
 
     /**
      * @param  array<int, Package>  $packages
@@ -34,6 +39,11 @@ final readonly class InstallPackages {
 
         sort($names);
 
-        return $this->requireDependencies->handle($resolved, $names, false, $force, $noInstall, $write);
+        $copied = $this->copyStub->handle('configs/essentials.php', self::ESSENTIALS_CONFIG, $force);
+
+        return [
+            self::ESSENTIALS_CONFIG => $copied ? Outcome::Created : Outcome::Skipped,
+            ...$this->requireDependencies->handle($resolved, $names, false, $force, $noInstall, $write),
+        ];
     }
 }

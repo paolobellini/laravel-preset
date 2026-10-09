@@ -46,12 +46,15 @@ public function store(StoreUserRequest $request, CreateUser $action): UserResour
 ## Data Objects
 
 - Built with `spatie/laravel-data`: `final` classes extending
-  `Spatie\LaravelData\Data`, one per action input, in `app/DTOs/`.
+  `Spatie\LaravelData\Data`, one per action input, in `app/DTOs/`. If the
+  package is not installed, write a plain `final readonly` class with a
+  `fromArray()` named constructor instead; the rest of this section still holds.
 - Typed promoted properties model the exact shape — this replaces the
   `array{...}` PHPDoc.
 - Build them from the **validated** payload — `Data::from($request->validated())`,
   never `Data::from($request)`, so unvalidated input cannot reach the action.
-- Export them to the frontend with `#[TypeScript]` (see `typescript.md`).
+- Export them to the frontend with `#[TypeScript]` when
+  `spatie/laravel-typescript-transformer` is installed (see `typescript.md`).
 
 ```php
 namespace App\DTOs;
@@ -79,7 +82,8 @@ search, sorting, …), **must** validate the request with a **Form Request**.
 
 Listing methods build the query with `spatie/laravel-query-builder` — see
 `query-builder.md` for the allow-list rules and for how the query parameters
-are validated.
+are validated. If the package is not installed, build the query by hand from
+the validated input only.
 
 ```php
 public function index(IndexUserRequest $request): AnonymousResourceCollection

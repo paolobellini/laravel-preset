@@ -13,7 +13,6 @@ it('creates every tooling config and reports each one', function () {
         'phpstan.neon' => Outcome::Created,
         'rector.php' => Outcome::Created,
         'rector-tests.php' => Outcome::Created,
-        'config/essentials.php' => Outcome::Created,
         'psalm.xml' => Outcome::Created,
         'tests/Pest.php' => Outcome::Created,
     ]);

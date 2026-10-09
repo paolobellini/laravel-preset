@@ -22,12 +22,19 @@ it('copies only the three tooling configs', function () {
         ->and($this->appBase.'/phpstan.neon')->toBeFile()
         ->and($this->appBase.'/rector.php')->toBeFile()
         ->and($this->appBase.'/rector-tests.php')->toBeFile()
-        ->and($this->appBase.'/config/essentials.php')->toBeFile()
+        ->and($this->appBase.'/config/essentials.php')->not->toBeFile()
         ->and($this->appBase.'/psalm.xml')->toBeFile()
         ->and($this->appBase.'/lefthook.yml')->not->toBeFile()
         ->and($this->appBase.'/eslint.config.js')->not->toBeFile()
         ->and($this->appBase.'/tsconfig.json')->not->toBeFile()
         ->and($this->appBase.'/.prettierrc')->not->toBeFile();
+});
+
+it('copies the essentials config with the runtime packages', function () {
+    seed($this->appBase);
+    Process::fake();
+
+    Artisan::call('preset:install', ['--packages' => true, '--no-interaction' => true]);
 
     expect(file_get_contents($this->appBase.'/config/essentials.php'))
         ->toContain('Unguard::class => true');
@@ -198,8 +205,8 @@ it('copies only the .ai conventions, nothing else', function () {
         ->and($this->appBase.'/.ai/guidelines/personal/form-requests.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/pest-agent.md')->toBeFile()
         ->and($this->appBase.'/.ai/guidelines/personal/php.md')->toBeFile()
-        ->and($this->appBase.'/.ai/guidelines/personal/query-builder.md')->toBeFile()
-        ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/query-builder.md')->not->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->not->toBeFile()
         ->and($this->appBase.'/.ai/mcp/mcp.json')->toBeFile()
         ->and($this->appBase.'/.claude')->not->toBeDirectory()
         ->and($this->appBase.'/CLAUDE.md')->not->toBeFile();
@@ -782,9 +789,11 @@ it('walks through the steps and installs the confirmed plan', function () {
         ->assertSuccessful();
 
     Process::assertRan(fn ($process) => $process->command === 'composer require --no-interaction nunomaduro/essentials spatie/laravel-data thecodingmachine/safe');
-    Process::assertNotRan(fn ($process) => str_starts_with($process->command, 'composer require --dev'));
+    Process::assertRan(fn ($process) => $process->command === 'composer require --dev --no-interaction laravel/boost');
 
     expect($this->appBase.'/.ai/guidelines/personal/actions.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/query-builder.md')->not->toBeFile()
+        ->and($this->appBase.'/config/essentials.php')->toBeFile()
         ->and($this->appBase.'/lefthook.yml')->toBeFile()
         ->and($this->appBase.'/pint.json')->not->toBeFile()
         ->and($this->appBase.'/.github')->not->toBeDirectory();
@@ -807,4 +816,30 @@ it('installs nothing when the plan is turned down', function () {
 
     expect($this->appBase.'/pint.json')->not->toBeFile()
         ->and($this->appBase.'/.ai')->not->toBeDirectory();
+});
+
+it('copies the guidelines of the packages the project already requires', function () {
+    seed($this->appBase);
+    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
+    $composer['require']['spatie/laravel-query-builder'] = '^6.0';
+    file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
+    Process::fake();
+
+    Artisan::call('preset:install', ['--ai' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.ai/guidelines/personal/query-builder.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->not->toBeFile();
+});
+
+it('copies the guidelines of the packages picked in the same run', function () {
+    seed($this->appBase);
+    $composer = json_decode(file_get_contents($this->appBase.'/composer.json'), true);
+    $composer['require']['inertiajs/inertia-laravel'] = '^2.0';
+    file_put_contents($this->appBase.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT));
+    Process::fake();
+
+    Artisan::call('preset:install', ['--packages' => true, '--ai' => true, '--no-interaction' => true]);
+
+    expect($this->appBase.'/.ai/guidelines/personal/query-builder.md')->toBeFile()
+        ->and($this->appBase.'/.ai/guidelines/personal/typescript.md')->toBeFile();
 });

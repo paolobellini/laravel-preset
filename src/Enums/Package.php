@@ -25,6 +25,14 @@ enum Package: string {
         };
     }
 
+    public function guideline(): ?string {
+        return match ($this) {
+            self::Data => null,
+            self::QueryBuilder => 'guidelines/personal/query-builder.md',
+            self::TypescriptTransformer => 'guidelines/personal/typescript.md',
+        };
+    }
+
     public function needsInertia(): bool {
         return match ($this) {
             self::Data, self::QueryBuilder => false,

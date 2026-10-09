@@ -25,3 +25,9 @@ it('ties only the typescript transformer to inertia', function () {
         ->and(Package::QueryBuilder->needsInertia())->toBeFalse()
         ->and(Package::TypescriptTransformer->needsInertia())->toBeTrue();
 });
+
+it('points to the guideline that only makes sense with the package', function () {
+    expect(Package::Data->guideline())->toBeNull()
+        ->and(Package::QueryBuilder->guideline())->toBe('guidelines/personal/query-builder.md')
+        ->and(Package::TypescriptTransformer->guideline())->toBe('guidelines/personal/typescript.md');
+});

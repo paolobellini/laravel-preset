@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **scripts** — `--scripts` now requires only the dev dependencies; the runtime
   packages moved to `--packages`.
+- **ai** — `laravel/boost` is required by the `ai` group instead of `scripts`.
+  The `query-builder.md` and `typescript.md` guidelines are copied only when
+  their package is part of the project, and `controllers.md` / `frontend.md`
+  say what to do without the optional packages.
+- **packages** — `config/essentials.php` is copied with the runtime packages
+  instead of the tooling configs.
 
 - **scripts** — a non-interactive run on a project without Inertia no longer
   requires `spatie/laravel-typescript-transformer`.

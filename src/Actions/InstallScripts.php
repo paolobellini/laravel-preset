@@ -16,7 +16,6 @@ final readonly class InstallScripts {
         'driftingly/rector-laravel',
         'fruitcake/laravel-debugbar',
         'larastan/larastan',
-        'laravel/boost',
         'laravel/pail',
         'laravel/pint',
         'pestphp/pest',

@@ -46,7 +46,8 @@ export interface BriefingFilters {
 ```
 
 - A type describing backend data is **generated**, not written — see
-  `typescript.md`. The file under `types/` re-exports or composes the generated
+  `typescript.md`. If `spatie/laravel-typescript-transformer` is not installed,
+  write it by hand, once, under `types/`. The file under `types/` re-exports or composes the generated
   types; it does not restate them by hand.
 - Only frontend-only shapes (component props, local UI state, filter objects)
   are hand-written there.
