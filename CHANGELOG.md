@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything else. On a host with Sail configured it asks (Sail or local);
   elsewhere it is detected. `--runtime=sail|local` answers without a prompt.
 
+### Changed
+
+- **output** — every group now prints one report: a line per file or command
+  with its outcome (`created`, `patched`, `removed`, `skipped`, `done`,
+  `failed`). The per-file hints such as *exists, use --force* are gone; a
+  `skipped` file is one that was already there.
+
 ### Fixed
 
 - **scripts** — `spatie/laravel-typescript-transformer` moved from
