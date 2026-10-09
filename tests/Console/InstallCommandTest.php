@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Process;
-use PaoloBellini\LaravelPreset\Exceptions\InvalidRuntime;
 
 function seed(string $base): void
 {
@@ -665,10 +664,17 @@ it('takes the runtime from the option without asking', function () {
 });
 
 it('rejects an unknown runtime before writing anything', function () {
-    try {
-        Artisan::call('preset:install', ['--configs' => true, '--runtime' => 'podman']);
-    } catch (InvalidRuntime) {
-    }
+    $this->artisan('preset:install', ['--configs' => true, '--runtime' => 'podman'])
+        ->expectsOutputToContain('Unknown runtime [podman]')
+        ->assertFailed();
+
+    expect($this->appBase.'/pint.json')->not->toBeFile();
+});
+
+it('rejects the sail runtime on a project without sail', function () {
+    $this->artisan('preset:install', ['--configs' => true, '--runtime' => 'sail'])
+        ->expectsOutputToContain('The sail runtime needs Laravel Sail')
+        ->assertFailed();
 
     expect($this->appBase.'/pint.json')->not->toBeFile();
 });

@@ -18,6 +18,7 @@ use PaoloBellini\LaravelPreset\Actions\ResolveRuntime;
 use PaoloBellini\LaravelPreset\Data\ResolvedRuntime;
 use PaoloBellini\LaravelPreset\Enums\Group;
 use PaoloBellini\LaravelPreset\Enums\Outcome;
+use PaoloBellini\LaravelPreset\Exceptions\InvalidRuntime;
 
 final class InstallCommand extends Command {
     protected $signature = 'preset:install
@@ -57,11 +58,17 @@ final class InstallCommand extends Command {
     public function handle(): int {
         $option = $this->option('runtime');
 
-        $this->resolved = $this->resolveRuntime->handle(
-            $this->laravel->basePath(),
-            is_string($option) ? $option : null,
-            $this->input->isInteractive(),
-        );
+        try {
+            $this->resolved = $this->resolveRuntime->handle(
+                $this->laravel->basePath(),
+                is_string($option) ? $option : null,
+                $this->input->isInteractive(),
+            );
+        } catch (InvalidRuntime $exception) {
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
 
         $this->components->twoColumnDetail('Runtime', $this->resolved->runtime->label());
 

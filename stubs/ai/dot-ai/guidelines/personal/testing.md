@@ -2,7 +2,7 @@
 
 ## Coverage
 
-- Minimum **90%** code coverage with Pest. Enforced by `composer cleanup`
+- Minimum **90%** code coverage with Pest. Enforced by `composer tests`
   (`pest --coverage --min=90` and `pest --type-coverage --min=90`).
 - Every new feature, fix, or refactor must keep coverage at or above 90%.
 
