@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Process;
+use PaoloBellini\LaravelPreset\Exceptions\InvalidRuntime;
 
 function seed(string $base): void
 {
@@ -122,7 +123,6 @@ it('strips the sail prefix from lefthook.yml when sail is not installed', functi
 it('strips the sail prefix when sail is installed but not configured', function () {
     mkdir($this->appBase.'/vendor/bin', 0777, true);
     file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
-    // no compose.yaml / docker-compose.yml
 
     Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
 
@@ -429,7 +429,6 @@ it('names each skill with a separate flag, never with an equals sign', function 
 
     Artisan::call('preset:install', ['--skills' => true, '--no-interaction' => true]);
 
-    // `--skill=name` is silently ignored by the CLI, which then installs every skill
     Process::assertRan(fn ($process): bool => ! str_contains((string) $process->command, '--skill='));
 });
 
@@ -621,11 +620,77 @@ it('uses plain composer when already running inside the sail container', functio
     Process::assertNotRan(fn ($process) => str_contains($process->command, 'vendor/bin/sail'));
 });
 
+it('asks where the commands run when sail is configured on the host', function () {
+    seed($this->appBase);
+    configureSail($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install', ['--scripts' => true])
+        ->expectsQuestion('Where do this project\'s commands run?', 'local')
+        ->assertSuccessful();
+
+    Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
+    Process::assertNotRan(fn ($process) => str_contains($process->command, 'vendor/bin/sail'));
+});
+
+it('words the closing steps for the chosen runtime', function (array $options, string $composer, string $artisan) {
+    seed($this->appBase);
+    configureSail($this->appBase);
+    Process::fake();
+
+    Artisan::call('preset:install', [
+        '--scripts' => true, '--ai' => true, '--no-install' => true, '--no-interaction' => true, ...$options,
+    ]);
+
+    expect(Artisan::output())
+        ->toContain("Run {$composer} update to pull")
+        ->toContain("Run {$composer} ci to verify")
+        ->toContain("Run {$artisan} boost:install");
+})->with([
+    'sail' => [[], './vendor/bin/sail composer', './vendor/bin/sail php artisan'],
+    'local' => [['--runtime' => 'local'], 'composer', 'php artisan'],
+]);
+
+it('takes the runtime from the option without asking', function () {
+    seed($this->appBase);
+    configureSail($this->appBase);
+    Process::fake();
+
+    $this->artisan('preset:install', ['--scripts' => true, '--lefthook' => true, '--runtime' => 'local'])
+        ->assertSuccessful();
+
+    Process::assertRan(fn ($process) => str_starts_with($process->command, 'composer require '));
+
+    expect(file_get_contents($this->appBase.'/lefthook.yml'))->not->toContain('vendor/bin/sail');
+});
+
+it('rejects an unknown runtime before writing anything', function () {
+    try {
+        Artisan::call('preset:install', ['--configs' => true, '--runtime' => 'podman']);
+    } catch (InvalidRuntime) {
+    }
+
+    expect($this->appBase.'/pint.json')->not->toBeFile();
+});
+
+it('keeps the sail prefix in lefthook.yml when installing from inside the container', function () {
+    configureSail($this->appBase);
+    putenv('LARAVEL_SAIL=1');
+
+    try {
+        Artisan::call('preset:install', ['--lefthook' => true, '--no-interaction' => true]);
+    } finally {
+        putenv('LARAVEL_SAIL');
+    }
+
+    expect(file_get_contents($this->appBase.'/lefthook.yml'))
+        ->toContain('vendor/bin/sail composer pint -- {staged_files}');
+});
+
 it('falls back to plain composer when sail is installed but not configured', function () {
     seed($this->appBase);
     mkdir($this->appBase.'/vendor/bin', 0777, true);
     file_put_contents($this->appBase.'/vendor/bin/sail', "#!/bin/sh\n");
-    // no compose.yaml / docker-compose.yml
     Process::fake();
 
     Artisan::call('preset:install', ['--scripts' => true, '--no-interaction' => true]);

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **runtime** — the installer now settles where the project's commands run
+  before anything else. On a host with Sail configured it asks (Sail or local);
+  elsewhere it is detected. `--runtime=sail|local` answers without a prompt.
+
 ### Fixed
 
 - **scripts** — `spatie/laravel-typescript-transformer` moved from

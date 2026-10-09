@@ -441,11 +441,29 @@ that ignores everything but itself, because the index is local to each machine.
 php artisan preset:install --configs --ai --scripts --github   # pick groups
 php artisan preset:install --skills                            # agent skills only
 php artisan preset:install --codegraph                         # build the code graph
+php artisan preset:install --runtime=local                     # sail | local, skips the question
 php artisan preset:install --force                             # overwrite existing files / deps
 php artisan preset:install --no-install                        # skip the auto composer update
 ```
 
 Without flags in a non-interactive shell, all groups install.
+
+### Runtime — where the project's commands run
+
+The first thing the installer settles, because the rest depends on it: how
+`composer require` is launched and whether the lefthook jobs carry the
+`vendor/bin/sail` prefix.
+
+| Situation | Runtime | Asked? |
+| --- | --- | --- |
+| No Sail (`vendor/bin/sail` or a compose file missing) | local | no |
+| Sail configured, installer run on the host | Sail by default | yes |
+| Installer run inside the container (`sail artisan …`) | Sail | no |
+
+`--runtime=sail|local` answers up front; a non-interactive run takes the default.
+Inside the container the runtime is still Sail — the files written for the
+project keep the prefix — but the installer's own commands run directly, since
+it is already where Sail would have sent them.
 
 ## Conventions in brief
 

@@ -7,6 +7,10 @@ namespace PaoloBellini\LaravelPreset\Console;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Process;
+use PaoloBellini\LaravelPreset\Actions\BuildCommand;
+use PaoloBellini\LaravelPreset\Actions\ResolveRuntime;
+use PaoloBellini\LaravelPreset\Data\ResolvedRuntime;
+use PaoloBellini\LaravelPreset\Enums\Runtime;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
@@ -23,6 +27,7 @@ final class InstallCommand extends Command {
         {--sharded : Replace the tests workflow with the sharded matrix variant}
         {--renovate : Use renovate instead of dependabot for dependency updates}
         {--renovate-selfhosted : Also install the scheduled workflow that runs renovate without the GitHub App}
+        {--runtime= : Where the project commands run: sail or local (detected when omitted)}
         {--force : Overwrite files that already exist}
         {--no-install : Write the new dependencies into composer.json without installing them}';
 
@@ -90,15 +95,7 @@ final class InstallCommand extends Command {
 
     private const RENOVATE_WORKFLOW_FILE = '.github/workflows/renovate.yml';
 
-    private const SAIL_BINARY = 'vendor/bin/sail';
-
-    private const SAIL_ENV = 'LARAVEL_SAIL';
-
     /**
-     * Agent scaffolding written by boost:install for agents other than Claude Code.
-     * `.idea` and `.vscode` are deliberately absent: boost writes into them, but
-     * they belong to the editor, not to boost.
-     *
      * @var array<int, string>
      */
     private const SUPERSEDED_AGENTS = [
@@ -116,10 +113,6 @@ final class InstallCommand extends Command {
     ];
 
     /**
-     * Source repository => skill names, as declared in each SKILL.md. They fill the
-     * gaps the personal guidelines leave rather than restating them, so nothing here
-     * competes with a convention the agent already carries.
-     *
      * @var array<string, array<int, string>>
      */
     private const SKILLS = [
@@ -135,10 +128,6 @@ final class InstallCommand extends Command {
     ];
 
     /**
-     * Skills land in .agents/skills as real files; claude-code gets symlinks to them.
-     * Naming the agents keeps the installer from writing into the directories of the
-     * agents self::SUPERSEDED_AGENTS removes.
-     *
      * @var array<int, string>
      */
     private const SKILL_AGENTS = ['universal', 'claude-code'];
@@ -242,7 +231,27 @@ final class InstallCommand extends Command {
         'ci' => ['@ci:php', '@ci:node'],
     ];
 
+    private ResolvedRuntime $resolved;
+
+    public function __construct(
+        private readonly ResolveRuntime $resolveRuntime,
+        private readonly BuildCommand $buildCommand,
+    ) {
+        parent::__construct();
+    }
+
     public function handle(Filesystem $files): int {
+
+        $option = $this->option('runtime');
+
+        $this->resolved = $this->resolveRuntime->handle(
+            $this->laravel->basePath(),
+            is_string($option) ? $option : null,
+            $this->input->isInteractive(),
+        );
+
+        $this->components->twoColumnDetail('Runtime', $this->resolved->runtime->label());
+
         $groups = $this->resolveGroups();
 
         if ($groups === []) {
@@ -282,8 +291,12 @@ final class InstallCommand extends Command {
         $this->newLine();
         $this->components->info('Preset installed.');
         $this->components->bulletList(array_values(array_filter([
-            $this->option('no-install') ? 'Run <fg=cyan>composer update</> to pull the new PHP dependencies.' : null,
-            'Run <fg=cyan>composer cleanup</> to verify everything passes.',
+            $this->option('no-install')
+                ? "Run <fg=cyan>{$this->command('composer update')}</> to pull the new PHP dependencies."
+                : null,
+            in_array('scripts', $groups, true)
+                ? "Run <fg=cyan>{$this->command('composer ci')}</> to verify everything passes."
+                : null,
             in_array('lefthook', $groups, true)
                 ? 'Run <fg=cyan>lefthook install</> to wire up the git hooks.'
                 : null,
@@ -291,21 +304,22 @@ final class InstallCommand extends Command {
                 ? 'Commit <fg=cyan>.agents/skills</> and <fg=cyan>skills-lock.json</>; <fg=cyan>npx skills update</> refreshes them.'
                 : null,
             in_array('ai', $groups, true)
-                ? 'Run <fg=cyan>php artisan boost:install</> — <fg=cyan>boost.json</> already pins it to Claude Code.'
+                ? "Run <fg=cyan>{$this->command('php artisan boost:install')}</> — <fg=cyan>boost.json</> already pins it to Claude Code."
                 : null,
         ])));
 
         return self::SUCCESS;
     }
 
+    private function command(string $command): string {
+        return $this->buildCommand->handle($this->resolved, $command);
+    }
+
     /**
      * @param  array<int, string>  $arguments
      */
-    private function runComposer(Filesystem $files, array $arguments): bool {
-        $binary = $this->usesSail($files) && ! $this->insideSail()
-            ? './'.self::SAIL_BINARY.' composer'
-            : 'composer';
-        $command = $binary.' '.implode(' ', $arguments);
+    private function runComposer(array $arguments): bool {
+        $command = $this->command('composer '.implode(' ', $arguments));
 
         $this->newLine();
         $this->components->info("Running {$command}…");
@@ -323,19 +337,6 @@ final class InstallCommand extends Command {
         }
 
         return true;
-    }
-
-    private function usesSail(Filesystem $files): bool {
-        if (! $files->exists($this->basePath(self::SAIL_BINARY))) {
-            return false;
-        }
-
-        return $files->exists($this->basePath('compose.yaml'))
-            || $files->exists($this->basePath('docker-compose.yml'));
-    }
-
-    private function insideSail(): bool {
-        return (bool) getenv(self::SAIL_ENV);
     }
 
     /**
@@ -427,12 +428,6 @@ final class InstallCommand extends Command {
         $this->components->task('Removing other agents', fn () => $this->removeOtherAgents($files));
     }
 
-    /**
-     * Delete the scaffolding boost:install wrote for every agent but Claude Code, and
-     * pin the choice in boost.json. Without the pin, boost re-detects agents from what
-     * it finds on the machine — PhpStorm being installed is enough — and writes the
-     * directories again on the next run.
-     */
     private function removeOtherAgents(Filesystem $files): void {
         foreach (self::SUPERSEDED_AGENTS as $artefact) {
             $target = $this->basePath($artefact);
@@ -466,13 +461,8 @@ final class InstallCommand extends Command {
         $this->line('  <fg=green>pinned</> '.self::BOOST_CONFIG.' to claude_code');
     }
 
-    /**
-     * Wires CodeGraph into the project (`.mcp.json`, `.claude/`) and builds the
-     * index. The binary lives on the host, once per machine: from inside the Sail
-     * container it is neither visible nor worth installing.
-     */
     private function installCodegraph(Filesystem $files): void {
-        if ($this->insideSail()) {
+        if ($this->resolved->insideContainer) {
             $this->components->warn(
                 'CodeGraph runs on the host, not in the Sail container. '
                 .'Run `php artisan preset:install --codegraph` outside Sail.'
@@ -502,10 +492,6 @@ final class InstallCommand extends Command {
         $this->runProcess(self::CODEGRAPH_INIT);
     }
 
-    /**
-     * The binary is the one thing that lands outside the project, so installing
-     * it is offered rather than run.
-     */
     private function setUpCodegraph(): bool {
         if (! $this->input->isInteractive()) {
             $this->components->warn(
@@ -664,11 +650,11 @@ final class InstallCommand extends Command {
         }
 
         if ($missing !== []) {
-            $this->runComposer($files, ['require', ...$flags, ...$missing]);
+            $this->runComposer(['require', ...$flags, ...$missing]);
         }
 
         if ($missingDev !== []) {
-            $this->runComposer($files, ['require', '--dev', ...$flags, ...$missingDev]);
+            $this->runComposer(['require', '--dev', ...$flags, ...$missingDev]);
         }
     }
 
@@ -705,15 +691,15 @@ final class InstallCommand extends Command {
     }
 
     private function stripSailFromLefthook(Filesystem $files, string $destination): void {
-        if ($this->usesSail($files)) {
+        if ($this->resolved->runtime === Runtime::Sail) {
             return;
         }
 
         $target = $this->basePath($destination);
 
-        $files->put($target, str_replace(self::SAIL_BINARY.' ', '', $files->get($target)));
+        $files->put($target, str_replace(Runtime::SAIL_BINARY.' ', '', $files->get($target)));
 
-        $this->line('  <fg=yellow>adjusted</> '.$destination.' (sail not detected, running the tools directly)');
+        $this->line('  <fg=yellow>adjusted</> '.$destination.' (local runtime, running the tools directly)');
     }
 
     private function copyDirectory(Filesystem $files, string $stub, string $destination): void {
