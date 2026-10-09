@@ -7,7 +7,11 @@ pre-commit:
       stage_fixed: true
 
     - name: stan
-      glob: "*.php"
+      glob:
+        - "{app,config,database,routes,tests}/*.php"
+        - "bootstrap/app.php"
+      exclude:
+        - "database/migrations/*"
       run: vendor/bin/sail composer stan -- {staged_files}
 
     - name: tests

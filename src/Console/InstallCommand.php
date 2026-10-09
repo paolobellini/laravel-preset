@@ -625,8 +625,6 @@ final class InstallCommand extends Command {
         /** @var array<string, string> $requireDev */
         $requireDev = $composer['require-dev'] ?? [];
 
-        // Checked against `require` alone: a runtime package sitting in `require-dev`
-        // is required again, which makes composer move it.
         $missing = $this->missingPackages(self::COMPOSER_REQUIRE, $require);
         $missingDev = $this->missingPackages(self::COMPOSER_REQUIRE_DEV, $require + $requireDev);
 
